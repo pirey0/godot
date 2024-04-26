@@ -6382,6 +6382,14 @@ Error RenderingDeviceDriverD3D12::_initialize_command_signatures() {
 }
 
 Error RenderingDeviceDriverD3D12::initialize(uint32_t p_device_index, uint32_t p_frame_count) {
+
+	HMODULE lib_dxil = nullptr;
+	lib_dxil = LoadLibraryW(L"dxil.dll");
+	if (lib_dxil == nullptr) {
+		OS::get_singleton()->alert("D3D12 failure: DXIL.dll was not found.\n\nClick OK to exit.");
+		CRASH_NOW();
+	}
+
 	context_device = context_driver->device_get(p_device_index);
 	adapter = context_driver->create_adapter(p_device_index);
 	ERR_FAIL_NULL_V(adapter, ERR_CANT_CREATE);

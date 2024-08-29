@@ -431,6 +431,11 @@ void ShaderPreprocessor::process_define(Tokenizer *p_tokenizer) {
 				set_error(RTR("Invalid argument name."), line);
 				return;
 			}
+			if (args.has(name)) {
+				set_error(RTR("Duplicate macro parameter name:") + " '" + name + "'", line);
+				return;
+			}
+
 			args.push_back(name);
 
 			p_tokenizer->skip_whitespace();

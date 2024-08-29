@@ -425,9 +425,18 @@ void ShaderPreprocessor::process_define(Tokenizer *p_tokenizer) {
 		// Macro has arguments.
 		p_tokenizer->get_token();
 
+		
 		while (true) {
 			String name = p_tokenizer->get_identifier();
 			if (name.is_empty()) {
+				//Support 0 argument funktionlike macros.
+				if (args.is_empty()) {
+					p_tokenizer->skip_whitespace();
+					if (p_tokenizer->get_token().text == ')'){
+						break;
+					}
+				}
+
 				set_error(RTR("Invalid argument name."), line);
 				return;
 			}

@@ -328,6 +328,50 @@ TEST_CASE("[ShaderPreprocessor] Invalid concatenations") {
 	CHECK_NE(preprocessor.preprocess("#define X(y) ## y", filename, result), Error::OK);
 }
 
+TEST_CASE("[ShaderPreprocessor] Duplicate macro argument name") {
+	String result;
+	String code(
+			"#define join(x, x) x ## x\n");
+
+	ShaderPreprocessor preprocessor;
+	String err;
+	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result, &err), Error::OK);
+	//Should throw error
+	CHECK_NE(err, String());
+}
+
+TEST_CASE("[ShaderPreprocessor] Functionlike Macro require parenthesis") {
+	String result;
+	String code(
+			"#define functionlike() \"42\"\n"
+			"const int a = functionlike + functionlike();"
+			);
+	String expected(
+			"const int a = functionlike + 42;"
+	);
+	ShaderPreprocessor preprocessor;
+	String err;
+	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result,&err), Error::OK);
+	CHECK_SHADER_EQ(result, expected);
+	//Should throw error
+	CHECK_NE(err, String());
+}
+
+TEST_CASE("[ShaderPreprocessor] Functionlike Macro require parenthesis 2") {
+	String result;
+	String code(
+			"#define foo() whatever()\n"
+			"foo foo() foo");
+	String expected(
+			"foo whatever() foo");
+	ShaderPreprocessor preprocessor;
+	String err;
+	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result, &err), Error::OK);
+	CHECK_SHADER_EQ(result, expected);
+	//Should throw error
+	CHECK_NE(err, String());
+}
+
 } // namespace TestShaderPreprocessor
 
 #endif // TEST_SHADER_PREPROCESSOR_H

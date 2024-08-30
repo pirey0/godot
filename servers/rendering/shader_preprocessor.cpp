@@ -432,7 +432,7 @@ void ShaderPreprocessor::process_define(Tokenizer *p_tokenizer) {
 				//Support 0 argument funktionlike macros.
 				if (args.is_empty()) {
 					p_tokenizer->skip_whitespace();
-					if (p_tokenizer->get_token().text == ')'){
+					if (p_tokenizer->get_token().text == ')') {
 						break;
 					}
 				}
@@ -1074,11 +1074,11 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 					String arg = p_line.substr(args_start, args_end - args_start).strip_edges();
 					if (arg.is_empty()) {
 						//Support 0 argument functionlike macros.
-						if (!reached_end || !args.is_empty()){
+						if (!reached_end || !args.is_empty()) {
 							set_error(RTR("Invalid macro argument."), p_line_number);
 							return false;
 						}
-					} else{
+					} else {
 						args.append(arg);
 						args_start = args_end + 1;
 					}

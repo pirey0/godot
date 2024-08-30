@@ -344,14 +344,12 @@ TEST_CASE("[ShaderPreprocessor] Functionlike Macro require parenthesis") {
 	String result;
 	String code(
 			"#define functionlike() \"42\"\n"
-			"const int a = functionlike + functionlike();"
-			);
+			"const int a = functionlike + functionlike();");
 	String expected(
-			"const int a = functionlike + 42;"
-	);
+			"const int a = functionlike + 42;");
 	ShaderPreprocessor preprocessor;
 	String err;
-	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result,&err), Error::OK);
+	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result, &err), Error::OK);
 	CHECK_SHADER_EQ(result, expected);
 	//Should throw error
 	CHECK_NE(err, String());

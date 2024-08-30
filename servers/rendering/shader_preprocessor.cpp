@@ -1024,7 +1024,7 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 
 	int index_start = 0;
 	int index = 0;
-	if (find_match_not_in_stringconst(result, key, index, index_start)) {
+	while (find_match_not_in_stringconst(result, key, index, index_start)) {
 		String body = define->body;
 		if (define->is_functionlike) {
 			// Functionlike Macro with parenthesis.
@@ -1032,11 +1032,12 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 			int args_start = -1;
 			int args_end = -1;
 			int brackets_open = 0;
-			bool has_brackets = false;
+			bool reached_end = false;
+			bool macro_name_used_as_identifier = false;
+
 			Vector<String> args;
 			for (int i = index_start - 1; i < p_line.length(); i++) {
 				bool add_argument = false;
-				bool reached_end = false;
 				char32_t c = p_line[i];
 
 				if (c == '(') {
@@ -1045,11 +1046,15 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 						args_start = i + 1;
 						args_end = -1;
 					}
+				} else if (c != ' ' && c != '\t' && args_start == -1) {
+					//functionlike macro has to start with an open parenthesis, otherwise we assume it's a variable or literal
+					macro_name_used_as_identifier = true;
+					break;
+
 				} else if (c == ')') {
 					brackets_open--;
 					if (brackets_open == 0) {
 						args_end = i;
-						has_brackets = true;
 						add_argument = true;
 						reached_end = true;
 					}
@@ -1084,8 +1089,12 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 				}
 			}
 
+			if (macro_name_used_as_identifier) {
+				continue;
+			}
+
 			//Functionlike Macros require brackets to be expanded
-			if (!has_brackets) {
+			if (!reached_end) {
 				return false;
 			}
 

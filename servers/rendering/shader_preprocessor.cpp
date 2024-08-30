@@ -1024,7 +1024,7 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 
 	int index_start = 0;
 	int index = 0;
-	while (find_match_not_in_string_literal(result, key, index, index_start)) {
+	while (find_match(result, key, index, index_start)) {
 		String body = define->body;
 		if (define->is_functionlike) {
 			// Functionlike Macro with parenthesis.
@@ -1108,7 +1108,7 @@ bool ShaderPreprocessor::expand_macros_once(const String &p_line, int p_line_num
 				String arg_name = define->arguments[i];
 				int arg_index_start = 0;
 				int arg_index = 0;
-				while (find_match_not_in_string_literal(body, arg_name, arg_index, arg_index_start)) {
+				while (find_match(body, arg_name, arg_index, arg_index_start)) {
 					body = body.substr(0, arg_index) + args[i] + body.substr(arg_index + arg_name.length(), body.length() - (arg_index + arg_name.length()));
 					// Manually reset arg_index_start to where the arg value of the define finishes.
 					// This ensures we don't skip the other args of this macro in the string.
@@ -1161,30 +1161,6 @@ bool ShaderPreprocessor::find_match(const String &p_string, const String &p_valu
 	}
 
 	return false;
-}
-
-bool ShaderPreprocessor::find_match_not_in_string_literal(const String &p_string, const String &p_value, int &r_index, int &r_index_start) {
-	//Finds match ignoring matches inside quotationmarks.
-	bool in_string = false;
-	while (true) {
-		int previous_start = r_index_start;
-		//r_index_start and r_index are incremented by find_match.
-		bool matched = find_match(p_string, p_value, r_index, r_index_start);
-		if (!matched) {
-			return false;
-		}
-
-		for (int i = previous_start; i < r_index; ++i) {
-			//Make sure escaped quotation marks are handled correctly.
-			if (p_string[i] == '"' && (i == 0 || p_string[i - 1] != '\\')) {
-				in_string = !in_string;
-			}
-		}
-
-		if (!in_string) {
-			return true;
-		}
-	}
 }
 
 void ShaderPreprocessor::concatenate_macro_body(String &r_body) {

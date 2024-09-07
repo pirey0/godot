@@ -208,6 +208,7 @@ TEST_CASE("[ShaderPreprocessor] Concatenation") {
 			"  A(9);\n"
 			"  Xy = C(X, y);\n"
 			"}\n");
+	//This does not match the GLSL preprocessor!
 	String expected(
 			"fragment() {\n"
 			"  float Xy = 1.2;\n"
@@ -341,7 +342,7 @@ TEST_CASE("[ShaderPreprocessor] Duplicate macro argument name") {
 TEST_CASE("[ShaderPreprocessor] Functionlike Macro require parenthesis") {
 	String result;
 	String code(
-			"#define functionlike() \"42\"\n"
+			"#define functionlike() 42\n"
 			"const int a = functionlike + functionlike();");
 	String expected(
 			"const int a = functionlike + 42;");
@@ -381,7 +382,7 @@ TEST_CASE("[ShaderPreprocessor] Partial macro in define gets expanded)") {
 TEST_CASE("[ShaderPreprocessor] Non-fuctionlike macros expand correctly") {
 	String code(
 			"#define nonfunctionlike f\n"
-			"const int a = nonfunctionlike + nonfunctionlike() + nonfunctionlike(1) + nonfunctionlike(1, 2););");
+			"const int a = nonfunctionlike + nonfunctionlike() + nonfunctionlike(1) + nonfunctionlike(1, 2);");
 	String expected("const int a = f + f() + f(1) + f(1, 2);");
 	String result;
 

@@ -1090,7 +1090,7 @@ bool ShaderPreprocessor::try_expand_macro(const String &p_line, int p_line_numbe
 	//Macro without parenthesis.
 	if (!p_define->is_functionlike) {
 		concatenate_macro_body(body);
-		r_expanded = p_line.substr(0, p_identifer_index) + " " + body + " " + p_line.substr(identifier_end_index, p_line.length() - identifier_end_index);
+		r_expanded = p_line.substr(0, p_identifer_index) + " " + body + " " + p_line.substr(identifier_end_index);
 		r_inserted_length = body.length();
 		return true;
 	}
@@ -1111,35 +1111,46 @@ bool ShaderPreprocessor::try_expand_macro(const String &p_line, int p_line_numbe
 
 	concatenate_macro_body(body);
 
-	r_expanded = p_line.substr(0, p_identifer_index) + " " + body + " " + p_line.substr(args_end_index + 1, p_line.length());
+	r_expanded = p_line.substr(0, p_identifer_index) + " " + body + " " + p_line.substr(args_end_index + 1);
 	r_inserted_length = body.length();
 	return true;
 }
 
 void ShaderPreprocessor::expand_and_replace_macro_arguments(int p_line_number, Define *p_define, Vector<String> &args, String &r_replaced_body) {
 	r_replaced_body = p_define->body;
-	// Insert macro arguments into the body.
+	Vector<String> args_expanded_bodies;
+	int identifier_index;
+	int identifier_length;
+	int index = 0;
+
+	//expand all arguments
 	for (int i = 0; i < args.size(); i++) {
-		String arg_name = p_define->arguments[i];
-		int arg_index_start = 0;
-		int arg_index = 0;
-		String arg_body = args[i];
 		String arg_body_expanded;
 		//expand macros in arguments to match glsl expansion order.
-		expand_macros(arg_body, p_line_number, arg_body_expanded);
+		expand_macros(args[i], p_line_number, arg_body_expanded);
+		args_expanded_bodies.push_back(arg_body_expanded);
+	}
 
-		while (find_match(r_replaced_body, arg_name, arg_index, arg_index_start)) {
-			String &replacement = arg_body_expanded;
-			//When an argument is used in a string-concatenation it is not expanded, but copied literally.
-			if (is_identifier_part_of_concatenation(r_replaced_body, arg_index, arg_index + arg_name.length())) {
-				replacement = arg_body;
-			}
+	//replace found arguments
+	while (find_next_identifier(r_replaced_body, index, identifier_index, identifier_length)) {
+		String identifier = r_replaced_body.substr(identifier_index, identifier_length);
+		int arg_id = p_define->arguments.find(identifier);
 
-			r_replaced_body = r_replaced_body.substr(0, arg_index) + replacement + r_replaced_body.substr(arg_index + arg_name.length());
-			// Manually reset arg_index_start to where the arg value of the define finishes.
-			// This ensures we don't skip the other args of this macro in the string.
-			arg_index_start = arg_index + replacement.length() + 1;
+		if (arg_id < 0) {
+			index = identifier_index + identifier_length;
+			continue;
 		}
+
+		String replacement;
+		//When an argument is used in a string-concatenation it is not expanded, but copied literally.
+		if (is_identifier_part_of_concatenation(r_replaced_body, identifier_index, identifier_index + identifier_length)) {
+			replacement = args[arg_id];
+		} else {
+			replacement = args_expanded_bodies[arg_id];
+		}
+
+		r_replaced_body = r_replaced_body.substr(0, identifier_index) + replacement + r_replaced_body.substr(identifier_index + identifier_length);
+		index = identifier_index + replacement.length();
 	}
 }
 

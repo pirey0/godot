@@ -442,6 +442,19 @@ TEST_CASE("[ShaderPreprocessor] Complex macro expansion with nesting and recursi
 	CHECK_SHADER_EQ(result, expected);
 }
 
+//This test fails if arguments are replaced sequentially rechecking already replaced sections
+TEST_CASE("[ShaderPreprocessor] Functionlike macro arguments replacement") {
+	String code(
+			"#define f(a, b, c) a+b*c\n"
+			"f(b,2,b)");
+	String expected("b + 2 * b");
+	String result;
+
+	ShaderPreprocessor preprocessor;
+	CHECK_EQ(preprocessor.preprocess(code, String("file.gdshader"), result), Error::OK);
+	CHECK_SHADER_EQ(result, expected);
+}
+
 } // namespace TestShaderPreprocessor
 
 #endif // TEST_SHADER_PREPROCESSOR_H

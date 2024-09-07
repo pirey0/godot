@@ -336,6 +336,7 @@ TEST_CASE("[ShaderPreprocessor] Duplicate macro argument name") {
 
 	ShaderPreprocessor preprocessor;
 	String err;
+	//expect error
 	CHECK_NE(preprocessor.preprocess(code, String("file.gdshader"), result), Error::OK);
 }
 
@@ -365,7 +366,7 @@ TEST_CASE("[ShaderPreprocessor] Functionlike Macro require parenthesis 2") {
 	CHECK_SHADER_EQ(result, expected);
 }
 
-TEST_CASE("[ShaderPreprocessor] Partial macro in define gets expanded)") {
+TEST_CASE("[ShaderPreprocessor] Partial macro in define gets expanded") {
 	String code(
 			"#define A B(\n"
 			"#define B() C\n"
@@ -405,11 +406,12 @@ TEST_CASE("[ShaderPreprocessor] Recursion avoidance") {
 	CHECK_SHADER_EQ(result, expected);
 }
 
-TEST_CASE("[ShaderPreprocessor] Recursion avoidance") {
+TEST_CASE("[ShaderPreprocessor] Argument unfolding with token pasting operation") {
 	String code(
-			"#define selfCall(x) x(x)+x(X)\n"
-			"selfCall(selfCall);");
-	String expected("selfCall(selfCall) + selfCall(X);");
+			"#define Twice(x) x ## x\n"
+			"#define kJoin(x) k ## x(1)\n"
+			"kJoin(Twice(j));");
+	String expected("kTwice(j) (1);");
 	String result;
 
 	ShaderPreprocessor preprocessor;
@@ -418,12 +420,20 @@ TEST_CASE("[ShaderPreprocessor] Recursion avoidance") {
 	CHECK_SHADER_EQ(result, expected);
 }
 
-TEST_CASE("[ShaderPreprocessor] Argument unfolding with token pasting operation") {
+TEST_CASE("[ShaderPreprocessor] Complex macro expansion with nesting and recursion") {
 	String code(
-			"#define Twice(x) x ## x\n"
-			"#define kJoin(x) k ## x(1)\n"
-			"kJoin(Twice(j));");
-	String expected("kTwice(j) (1);");
+			"#define X(x) (x + 1)\n"
+			"#define Y(x) X(x) * 2\n"
+			"#define Z(x) Y(x) + 3\n"
+			"#define W(x) Z(x)\n"
+			"#define V(x) W(x + 2)\n"
+			"int result1 = V(1);\n"
+			"int result2 = Z(Y(X(1)));\n"
+			"int result3 = W(V(1));\n");
+	String expected(
+			"int result1 = (1 + 2 + 1) * 2 + 3;\n"
+			"int result2 = ( ( (1 + 1) + 1) * 2 + 1) * 2 + 3;\n"
+			"int result3 = ( (1 + 2 + 1) * 2 + 3 + 1) * 2 + 3;\n");
 	String result;
 
 	ShaderPreprocessor preprocessor;

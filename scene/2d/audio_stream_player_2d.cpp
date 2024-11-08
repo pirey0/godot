@@ -31,6 +31,7 @@
 #include "audio_stream_player_2d.h"
 
 #include "core/config/project_settings.h"
+#include "core/debugger/engine_debugger.h"
 #include "scene/2d/area_2d.h"
 #include "scene/2d/audio_listener_2d.h"
 #include "scene/main/window.h"
@@ -96,6 +97,13 @@ void AudioStreamPlayer2D::_notification(int p_what) {
 					// This node is no longer actively playing audio.
 					active.clear();
 					set_physics_process_internal(false);
+#ifdef DEBUG_ENABLED
+					if (EngineDebugger::get_singleton()) {
+						Array arr;
+						arr.push_back(get_instance_id());
+						EngineDebugger::get_singleton()->send_message("audio:stop", arr);
+					}
+#endif
 				}
 				if (!playbacks_to_remove.is_empty()) {
 					emit_signal(SNAME("finished"));
@@ -267,6 +275,16 @@ void AudioStreamPlayer2D::play(float p_from_pos) {
 	setplay.set(p_from_pos);
 	active.set();
 	set_physics_process_internal(true);
+
+	#ifdef DEBUG_ENABLED
+	if (EngineDebugger::get_singleton()) {
+		Array arr;
+		arr.push_back(get_instance_id());
+		arr.push_back(get_path().operator String());
+		arr.push_back(stream->get_path());
+		EngineDebugger::get_singleton()->send_message("audio:play", arr);
+	}
+	#endif
 }
 
 void AudioStreamPlayer2D::seek(float p_seconds) {
@@ -284,6 +302,14 @@ void AudioStreamPlayer2D::stop() {
 	stream_playbacks.clear();
 	active.clear();
 	set_physics_process_internal(false);
+
+	#ifdef DEBUG_ENABLED
+	if (EngineDebugger::get_singleton()) {
+		Array arr;
+		arr.push_back(get_instance_id());
+		EngineDebugger::get_singleton()->send_message("audio:stop", arr);
+	}
+#endif
 }
 
 bool AudioStreamPlayer2D::is_playing() const {

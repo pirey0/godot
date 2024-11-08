@@ -46,6 +46,7 @@
 #include "scene/gui/menu_button.h"
 #include "scene/gui/tab_container.h"
 #include "scene/resources/packed_scene.h"
+#include "editor/debugger/audio_editor_debugger.h"
 
 template <typename Func>
 void _for_all(TabContainer *p_node, const Func &p_func) {
@@ -90,6 +91,8 @@ EditorDebuggerNode::EditorDebuggerNode() {
 	inspect_edited_object_timeout = EDITOR_GET("debugger/remote_inspect_refresh_interval");
 
 	EditorRunBar::get_singleton()->get_pause_button()->connect("pressed", callable_mp(this, &EditorDebuggerNode::_paused));
+
+	add_debugger_plugin(memnew(AudioEditorDebugger));
 }
 
 ScriptEditorDebugger *EditorDebuggerNode::_add_debugger() {

@@ -36,6 +36,8 @@
 
 class TextEdit;
 class Tree;
+class LineEdit;
+class Label;
 
 class AudioEditorDebugger : public EditorDebuggerPlugin {
 	GDCLASS(AudioEditorDebugger, EditorDebuggerPlugin);
@@ -57,12 +59,17 @@ public:
 private:
 	Tree *tree = nullptr;
 	Timer *refresh_timer = nullptr;
+	Label *summary = nullptr;
+	LineEdit *search = nullptr;
 	bool dirty = false;
 
 	HashMap<uint64_t, AudioInfo> player_map;
 
 protected:
+	void _notification(int what);
 	static void _bind_methods();
+
+	void on_search_changed(String new_search) { dirty = true; }
 
 	void refresh_display();
 

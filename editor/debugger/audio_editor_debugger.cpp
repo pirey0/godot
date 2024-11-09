@@ -30,25 +30,24 @@
 
 #include "audio_editor_debugger.h"
 
+#include "editor/editor_scale.h"
 #include "scene/gui/box_container.h"
 #include "scene/gui/button.h"
-#include "scene/gui/label.h"
-#include "scene/gui/text_edit.h"
 #include "scene/gui/control.h"
+#include "scene/gui/label.h"
+#include "scene/gui/line_edit.h"
+#include "scene/gui/text_edit.h"
 #include "scene/gui/tree.h"
-#include "editor/editor_scale.h"
 
 void AudioEditorDebugger::_bind_methods() {
 }
 
-bool AudioEditorDebugger::has_capture(const String& p_capture) const {
+bool AudioEditorDebugger::has_capture(const String &p_capture) const {
 	return p_capture == "audio";
 }
 
-bool AudioEditorDebugger::capture(const String& p_msg, const Array& p_data, int p_index) {
-
+bool AudioEditorDebugger::capture(const String &p_msg, const Array &p_data, int p_index) {
 	if (p_msg == "audio:play") {
-
 		uint64_t id = p_data[0];
 		AudioInfo info;
 		info.instance_id = id;
@@ -70,7 +69,7 @@ bool AudioEditorDebugger::capture(const String& p_msg, const Array& p_data, int 
 		return true;
 	}
 
-	if (p_msg == "audio:update"){
+	if (p_msg == "audio:update") {
 		uint64_t id = p_data[0];
 		auto info = player_map.getptr(id);
 		if (info) {
@@ -96,7 +95,6 @@ bool AudioEditorDebugger::capture(const String& p_msg, const Array& p_data, int 
 }
 
 void AudioEditorDebugger::setup_session(int p_session_id) {
-
 	Ref<EditorDebuggerSession> session = get_session(p_session_id);
 	ERR_FAIL_COND(session.is_null());
 
@@ -105,26 +103,33 @@ void AudioEditorDebugger::setup_session(int p_session_id) {
 	audio->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	audio->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 
+	HBoxContainer *hbox = memnew(HBoxContainer);
+	audio->add_child(hbox);
+
+	summary = memnew(Label);
+	summary->set_custom_minimum_size(Size2(200, 0));
+	hbox->add_child(summary);
+
+	search = memnew(LineEdit);
+	search->set_placeholder(TTR("Search"));
+	search->connect("text_changed", callable_mp(this, &AudioEditorDebugger::on_search_changed));
+	hbox->add_child(search);
+
 	tree = memnew(Tree);
 	tree->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	tree->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 	audio->add_child(tree);
 
-
-	tree->set_columns(7);
+	tree->set_columns(6);
 	tree->set_column_titles_visible(true);
-	tree->set_column_title(0, TTR("Type"));
-	tree->set_column_title(1, TTR("Source"));
-	tree->set_column_title(2, TTR("Stream"));
-	tree->set_column_title(3, TTR("Bus"));
-	tree->set_column_title(4, TTR("Volume"));
-	tree->set_column_title(5, TTR("Playback Time"));
-	tree->set_column_title(6, TTR("Direction"));
+	tree->set_column_title(0, TTR("Source"));
+	tree->set_column_title(1, TTR("Stream"));
+	tree->set_column_title(2, TTR("Bus"));
+	tree->set_column_title(3, TTR("Volume"));
+	tree->set_column_title(4, TTR("Playback Time"));
+	tree->set_column_title(5, TTR("Direction"));
 	tree->set_hide_root(true);
 
-	//tree->set_column_custom_minimum_width(3, 100 * EDSCALE);
-	//tree->set_hide_root(true);
-	
 	refresh_timer = memnew(Timer);
 	refresh_timer->set_wait_time(0.5);
 	refresh_timer->connect("timeout", callable_mp(this, &AudioEditorDebugger::refresh_display));
@@ -132,7 +137,6 @@ void AudioEditorDebugger::setup_session(int p_session_id) {
 	audio->add_child(refresh_timer);
 
 	session->add_session_tab(audio);
-
 }
 
 void AudioEditorDebugger::refresh_display() {
@@ -141,9 +145,13 @@ void AudioEditorDebugger::refresh_display() {
 	}
 
 	dirty = false;
-	String out = "Total Playing: " + itos(player_map.size()) + "\n";
-
+	int count = player_map.size();
+	summary->set_text("Total Playing: " + itos(count));
 	tree->clear();
+
+	if (count == 0)
+		return;
+
 	auto root = tree->create_item();
 
 	auto type1 = tree->create_item(root);
@@ -153,8 +161,14 @@ void AudioEditorDebugger::refresh_display() {
 	auto type0 = tree->create_item(root);
 	type0->set_text(0, "Other");
 
+	String filter = search->get_text().strip_edges();
+
 	for (auto x : player_map) {
 		auto info = x.value;
+
+		if (!filter.is_empty() && !info.instance_path.contains(filter) && !info.stream_path.contains(filter))
+			continue;
+
 		auto parent = type0;
 		if (info.type == 1) {
 			parent = type1;
@@ -163,13 +177,39 @@ void AudioEditorDebugger::refresh_display() {
 		}
 
 		TreeItem *it = tree->create_item(parent);
-		it->set_text(0, itos(info.type));
-		it->set_text(1, info.instance_path);
-		it->set_text(2, info.stream_path);
-		it->set_text(3, info.bus.operator String());
-		it->set_text(4, String::num_real(info.volume));
-		it->set_text(5, String::num_real(info.playback_position));
-		it->set_text(6, info.direction.operator String());
-	}
+		it->set_text(0, info.instance_path);
+		it->set_text(1, info.stream_path);
+		it->set_text(2, info.bus.operator String());
+		it->set_text(3, String::num_real(info.volume));
+		it->set_text(4, String::num_real(info.playback_position));
 
+		if (info.direction.length_squared() > 0.1) {
+			float angle = info.direction.angle();
+			if (angle < 0) {
+				angle += 2 * Math_PI;
+			}
+			if (angle < Math_PI * 0.33) {
+				it->add_button(5, tree->get_editor_theme_icon(SNAME("ArrowRight")));
+			} else if (angle < Math_PI * 0.66) {
+				it->add_button(5, tree->get_editor_theme_icon(SNAME("ArrowDown")));
+			} else if (angle < Math_PI * 1.33) {
+				it->add_button(5, tree->get_editor_theme_icon(SNAME("ArrowLeft")));
+			} else if (angle < Math_PI * 1.66) {
+				it->add_button(5, tree->get_editor_theme_icon(SNAME("ArrowUp")));
+			} else {
+				it->add_button(5, tree->get_editor_theme_icon(SNAME("ArrowRight")));
+			}
+		}
+	}
+}
+
+void AudioEditorDebugger::_notification(int p_what) {
+	switch (p_what) {
+
+		case Node::NOTIFICATION_ENTER_TREE:
+			[[fallthrough]];
+		case Control::NOTIFICATION_THEME_CHANGED:
+			search->set_right_icon(search->get_editor_theme_icon(SNAME("Search")));
+			break;
+	}
 }

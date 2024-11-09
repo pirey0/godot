@@ -114,6 +114,17 @@ void AudioStreamPlayer2D::_notification(int p_what) {
 				AudioServer::get_singleton()->stop_playback_stream(stream_playbacks[0]);
 				stream_playbacks.remove_at(0);
 			}
+
+#ifdef DEBUG_ENABLED
+			if (EngineDebugger::get_singleton()) {
+				Array arr;
+				arr.push_back(get_instance_id());
+				arr.push_back(volume_db);
+				arr.push_back(get_bus());
+				arr.push_back(get_playback_position());
+				EngineDebugger::get_singleton()->send_message("audio:update", arr);
+			}
+			#endif
 		} break;
 	}
 }
@@ -217,6 +228,15 @@ void AudioStreamPlayer2D::_update_panning() {
 		const AudioFrame &prev_sample = volume_vector[0];
 		AudioFrame new_sample = AudioFrame(l, r) * multiplier;
 		volume_vector.write[0] = AudioFrame(MAX(prev_sample[0], new_sample[0]), MAX(prev_sample[1], new_sample[1]));
+
+		#ifdef DEBUG_ENABLED
+		if (EngineDebugger::get_singleton()) {
+			Array arr;
+			arr.push_back(get_instance_id());
+			arr.push_back(relative_to_listener);
+			EngineDebugger::get_singleton()->send_message("audio:relative_position", arr);
+		}
+#endif
 	}
 
 	for (const Ref<AudioStreamPlayback> &playback : stream_playbacks) {
@@ -282,6 +302,7 @@ void AudioStreamPlayer2D::play(float p_from_pos) {
 		arr.push_back(get_instance_id());
 		arr.push_back(get_path().operator String());
 		arr.push_back(stream->get_path());
+		arr.push_back(1); //Type 1: StreamPlayer2D
 		EngineDebugger::get_singleton()->send_message("audio:play", arr);
 	}
 	#endif

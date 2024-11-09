@@ -35,20 +35,27 @@
 #include "editor/plugins/editor_debugger_plugin.h"
 
 class TextEdit;
+class Tree;
 
 class AudioEditorDebugger : public EditorDebuggerPlugin {
 	GDCLASS(AudioEditorDebugger, EditorDebuggerPlugin);
 
 public:
 	struct AudioInfo {
-		String path;
-		String steam_path;
+		ObjectID instance_id;
+		String instance_path;
+		String stream_path;
+		unsigned char type = 0;
+		float volume = 0.0f;
+		StringName bus;
+		Vector2 direction = Vector2();
+		float playback_position = 0.0f;
 
 		AudioInfo() {}
 	};
 
 private:
-	TextEdit *text_info = nullptr;
+	Tree *tree = nullptr;
 	Timer *refresh_timer = nullptr;
 	bool dirty = false;
 

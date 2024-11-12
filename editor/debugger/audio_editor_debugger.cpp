@@ -38,6 +38,11 @@
 #include "scene/gui/line_edit.h"
 #include "scene/gui/text_edit.h"
 #include "scene/gui/tree.h"
+#include "core/variant/variant_utility.h"
+#include "editor/filesystem_dock.h"
+#include "editor/debugger/editor_debugger_node.h"
+#include "editor/debugger/script_editor_debugger.h"
+#include "editor/scene_tree_dock.h"
 
 void AudioEditorDebugger::_bind_methods() {
 }
@@ -111,8 +116,10 @@ void AudioEditorDebugger::setup_session(int p_session_id) {
 	hbox->add_child(summary);
 
 	search = memnew(LineEdit);
+	search->set_custom_minimum_size(Size2(150, 0));
 	search->set_placeholder(TTR("Search"));
 	search->connect("text_changed", callable_mp(this, &AudioEditorDebugger::on_search_changed));
+	search->set_right_icon(search->get_editor_theme_icon(SNAME("Search")));
 	hbox->add_child(search);
 
 	tree = memnew(Tree);
@@ -129,6 +136,7 @@ void AudioEditorDebugger::setup_session(int p_session_id) {
 	tree->set_column_title(4, TTR("Playback Time"));
 	tree->set_column_title(5, TTR("Direction"));
 	tree->set_hide_root(true);
+	tree->connect("item_activated", callable_mp(this, &AudioEditorDebugger::on_tree_item_activated));
 
 	refresh_timer = memnew(Timer);
 	refresh_timer->set_wait_time(0.5);
@@ -147,7 +155,9 @@ void AudioEditorDebugger::refresh_display() {
 	dirty = false;
 	int count = player_map.size();
 	summary->set_text("Total Playing: " + itos(count));
+
 	tree->clear();
+	tree_to_info.clear();
 
 	if (count == 0)
 		return;
@@ -166,7 +176,10 @@ void AudioEditorDebugger::refresh_display() {
 	for (auto x : player_map) {
 		auto info = x.value;
 
-		if (!filter.is_empty() && !info.instance_path.contains(filter) && !info.stream_path.contains(filter))
+		if (!filter.is_empty() &&
+			!info.instance_path.contains(filter) &&
+			!info.stream_path.contains(filter) &&
+			!info.bus.operator String().contains(filter))
 			continue;
 
 		auto parent = type0;
@@ -177,6 +190,7 @@ void AudioEditorDebugger::refresh_display() {
 		}
 
 		TreeItem *it = tree->create_item(parent);
+		tree_to_info[it] = player_map.getptr(x.key);
 		it->set_text(0, info.instance_path);
 		it->set_text(1, info.stream_path);
 		it->set_text(2, info.bus.operator String());
@@ -201,6 +215,31 @@ void AudioEditorDebugger::refresh_display() {
 			}
 		}
 	}
+}
+
+void AudioEditorDebugger::on_tree_item_activated() {
+	//When dirty tree_to_info may contain dangling pointers
+
+	TreeItem *selected = tree->get_selected();
+	int column = tree->get_selected_column();
+	AudioInfo **ptr = tree_to_info.getptr(selected);
+	if (ptr == nullptr)
+		return;
+
+	switch (column) {
+		case 0: //instance path
+		{
+			//SceneTreeDock::get_singleton()->set_selected(target_node);
+			break;
+		}
+		case 1: //Stream path
+		{
+			FileSystemDock *file_system_dock = FileSystemDock::get_singleton();
+			file_system_dock->navigate_to_path((*ptr)->stream_path);
+			break;
+		}
+	}
+
 }
 
 void AudioEditorDebugger::_notification(int p_what) {

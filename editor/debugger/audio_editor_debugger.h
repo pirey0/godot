@@ -38,6 +38,7 @@ class TextEdit;
 class Tree;
 class LineEdit;
 class Label;
+class TreeItem;
 
 class AudioEditorDebugger : public EditorDebuggerPlugin {
 	GDCLASS(AudioEditorDebugger, EditorDebuggerPlugin);
@@ -64,7 +65,8 @@ private:
 	bool dirty = false;
 
 	HashMap<uint64_t, AudioInfo> player_map;
-
+	HashMap<TreeItem *, AudioInfo *> tree_to_info;
+	
 protected:
 	void _notification(int what);
 	static void _bind_methods();
@@ -72,6 +74,8 @@ protected:
 	void on_search_changed(String new_search) { dirty = true; }
 
 	void refresh_display();
+
+	void on_tree_item_activated();
 
 public:
 	virtual bool has_capture(const String &p_capture) const override;

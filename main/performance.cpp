@@ -61,6 +61,8 @@ void Performance::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_custom_monitor", "id"), &Performance::get_custom_monitor);
 	ClassDB::bind_method(D_METHOD("get_monitor_modification_time"), &Performance::get_monitor_modification_time);
 	ClassDB::bind_method(D_METHOD("get_custom_monitor_names"), &Performance::get_custom_monitor_names);
+	ClassDB::bind_method(D_METHOD("get_time_lost"), &Performance::get_time_lost);
+	ClassDB::bind_method(D_METHOD("set_time_lost"), &Performance::set_time_lost);
 
 	BIND_ENUM_CONSTANT(TIME_FPS);
 	BIND_ENUM_CONSTANT(TIME_PROCESS);
@@ -571,6 +573,14 @@ Performance::Performance() {
 	_navigation_process_time = 0;
 	_monitor_modification_time = 0;
 	singleton = this;
+}
+
+uint64_t Performance::get_time_lost() {
+	return time_lost;
+}
+
+void Performance::set_time_lost(uint64_t t) {
+	time_lost = t;
 }
 
 Performance::MonitorCall::MonitorCall(Callable p_callable, Vector<Variant> p_arguments) {

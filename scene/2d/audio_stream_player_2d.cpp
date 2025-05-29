@@ -38,6 +38,7 @@
 #include "scene/resources/world_2d.h"
 #include "servers/audio/audio_stream.h"
 #include "servers/audio_server.h"
+#include "main/performance.h"
 
 #ifndef PHYSICS_2D_DISABLED
 #include "scene/2d/physics/area_2d.h"
@@ -79,6 +80,9 @@ void AudioStreamPlayer2D::_notification(int p_what) {
 
 // Interacts with PhysicsServer2D, so can only be called during _physics_process.
 StringName AudioStreamPlayer2D::_get_actual_bus() {
+
+	uint64_t t = OS::get_singleton()->get_ticks_usec();
+
 #ifndef PHYSICS_2D_DISABLED
 	Vector2 global_pos = get_global_position();
 
@@ -111,6 +115,7 @@ StringName AudioStreamPlayer2D::_get_actual_bus() {
 	}
 #endif // PHYSICS_2D_DISABLED
 
+	Performance::get_singleton()->time_lost += OS::get_singleton()->get_ticks_usec() - t;
 	return internal->bus;
 }
 

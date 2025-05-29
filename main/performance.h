@@ -151,6 +151,10 @@ public:
 
 	uint64_t get_monitor_modification_time();
 
+	uint64_t time_lost;
+	uint64_t get_time_lost();
+	void set_time_lost(uint64_t t);
+
 	static Performance *get_singleton() { return singleton; }
 
 	Performance();

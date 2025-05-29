@@ -38,6 +38,7 @@
 #include "scene/audio/audio_stream_player_internal.h"
 #include "scene/main/viewport.h"
 #include "servers/audio/audio_stream.h"
+#include "main/performance.h"
 
 #ifndef PHYSICS_3D_DISABLED
 #include "scene/3d/physics/area_3d.h"
@@ -306,6 +307,8 @@ void AudioStreamPlayer3D::_notification(int p_what) {
 // Interacts with PhysicsServer3D, so can only be called during _physics_process
 Area3D *AudioStreamPlayer3D::_get_overriding_area() {
 	//check if any area is diverting sound into a bus
+
+	uint64_t t = OS::get_singleton()->get_ticks_usec();
 	Ref<World3D> world_3d = get_world_3d();
 	ERR_FAIL_COND_V(world_3d.is_null(), nullptr);
 
@@ -339,6 +342,9 @@ Area3D *AudioStreamPlayer3D::_get_overriding_area() {
 
 		return tarea;
 	}
+
+	
+	Performance::get_singleton()->time_lost += OS::get_singleton()->get_ticks_usec() - t;
 	return nullptr;
 }
 #endif // PHYSICS_3D_DISABLED

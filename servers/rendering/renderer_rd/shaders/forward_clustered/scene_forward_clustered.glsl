@@ -1501,7 +1501,7 @@ void fragment_shader(in SceneData scene_data) {
 	// fog must be processed as early as possible and then packed.
 	// to maximize VGPR usage
 	// Draw "fixed" fog before volumetric fog to ensure volumetric fog can appear in front of the sky.
-
+	vec4 res = vec4(0.0);
 	if (bool(scene_data.flags & SCENE_DATA_FLAGS_USE_FOG)) {
 		fog = fog_process(vertex);
 		// Premultiply by opacity and convert opacity to transmittance to match volumetric fog.

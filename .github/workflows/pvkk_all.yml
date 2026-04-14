@@ -11,6 +11,7 @@ jobs:
     name: 🐧 Linux Editor
     runs-on: ubuntu-22.04
     timeout-minutes: 90
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,106 +53,93 @@ jobs:
           path: bin/godot.linuxbsd.editor.x86_64
 
   # ─────────────────────────────────────────────
-  # Windows Editor  (x86_64)
+  # Windows Builds (MSVC)
   # ─────────────────────────────────────────────
-  build-windows-editor:
-    name: 🪟 Windows Editor
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
+  build-windows:
+    name: 🪟 Windows Builds
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Editor
+            target: editor
+            artifact: godot-windows-editor-x86_64
+            bin: bin/godot.windows.editor.x86_64.exe
+
+          - name: Template Debug
+            target: template_debug
+            artifact: godot-windows-template-debug-x86_64
+            bin: bin/godot.windows.template_debug.x86_64.exe
+
+          - name: Template Release
+            target: template_release
+            artifact: godot-windows-template-release-x86_64
+            bin: bin/godot.windows.template_release.x86_64.exe
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Windows cross-compilation dependencies
+      - name: Setup Python + SCons
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            scons \
-            pkg-config \
-            mingw-w64 \
-            yasm
+          python -m pip install --upgrade pip
+          pip install scons requests
 
-      - name: Build – Windows Editor x86_64
+      # ─────────────────────────────────────────
+      # D3D12 (non-fatal)
+      # ─────────────────────────────────────────
+      - name: Fetch D3D12 dependencies
+        id: d3d12
+        shell: pwsh
         run: |
-          scons target=editor platform=windows arch=x86_64 -j$(nproc)
+          try {
+            python misc/scripts/install_d3d12_sdk_windows.py
+            echo "enabled=yes" >> $env:GITHUB_OUTPUT
+          } catch {
+            Write-Host "D3D12 fetch failed, continuing without it"
+            echo "enabled=no" >> $env:GITHUB_OUTPUT
+          }
 
+      # ─────────────────────────────────────────
+      # Build
+      # ─────────────────────────────────────────
+      - name: Build (${{ matrix.name }})
+        shell: pwsh
+        run: |
+          scons `
+            platform=windows `
+            target=${{ matrix.target }} `
+            arch=x86_64 `
+            debug_symbols=yes `
+            d3d12=${{ steps.d3d12.outputs.enabled }}
+
+      # ─────────────────────────────────────────
+      # Validate output
+      # ─────────────────────────────────────────
+      - name: Validate build output
+        shell: pwsh
+        run: |
+          if (!(Test-Path "${{ matrix.bin }}")) {
+            throw "Missing EXE: ${{ matrix.bin }}"
+          }
+
+          $pdb = "${{ matrix.bin }}".Replace(".exe", ".pdb")
+          if (!(Test-Path $pdb)) {
+            throw "Missing PDB: $pdb"
+          }
+
+      # ─────────────────────────────────────────
+      # Upload EXE + PDB
+      # ─────────────────────────────────────────
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: godot-windows-editor-x86_64
+          name: ${{ matrix.artifact }}
           path: |
-            bin/godot.windows.editor.x86_64.exe
-            bin/godot.windows.editor.x86_64.pdb
-
-  # ─────────────────────────────────────────────
-  # Windows Template – Debug  (x86_64)
-  # ─────────────────────────────────────────────
-  build-windows-template-debug:
-    name: 🪟 Windows Template (Debug)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Windows cross-compilation dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            scons \
-            pkg-config \
-            mingw-w64 \
-            yasm
-
-      - name: Build – Windows Template Debug x86_64
-        run: |
-          scons target=template_debug debug_symbols=yes platform=windows arch=x86_64 -j$(nproc)
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-windows-template-debug-x86_64
-          path: |
-            bin/godot.windows.template_debug.x86_64.exe
-            bin/godot.windows.template_debug.x86_64.pdb
-
-  # ─────────────────────────────────────────────
-  # Windows Template – Release  (x86_64)
-  # ─────────────────────────────────────────────
-  build-windows-template-release:
-    name: 🪟 Windows Template (Release)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 90
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Windows cross-compilation dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            scons \
-            pkg-config \
-            mingw-w64 \
-            yasm
-
-      - name: Build – Windows Template Release x86_64
-        run: |
-          scons target=template_release debug_symbols=yes platform=windows arch=x86_64 -j$(nproc)
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: godot-windows-template-release-x86_64
-          path: |
-            bin/godot.windows.template_release.x86_64.exe
-            bin/godot.windows.template_release.x86_64.pdb
+            ${{ matrix.bin }}
+            ${{ matrix.bin }}.pdb

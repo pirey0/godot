@@ -1,0 +1,157 @@
+name: 🏗️ PVKK Multi-Platform Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Linux Editor  (x86_64)
+  # ─────────────────────────────────────────────
+  build-linux-editor:
+    name: 🐧 Linux Editor
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            scons \
+            pkg-config \
+            libx11-dev \
+            libxcursor-dev \
+            libxinerama-dev \
+            libgl1-mesa-dev \
+            libglu-dev \
+            libasound2-dev \
+            libpulse-dev \
+            libudev-dev \
+            libxi-dev \
+            libxrandr-dev \
+            yasm
+
+      - name: Build – Linux Editor x86_64
+        run: |
+          scons target=editor platform=linuxbsd arch=x86_64 -j$(nproc)
+
+      - name: Prepare artifact
+        run: |
+          strip bin/godot.linuxbsd.editor.x86_64
+          chmod +x bin/godot.linuxbsd.editor.x86_64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-linux-editor-x86_64
+          path: bin/godot.linuxbsd.editor.x86_64
+
+  # ─────────────────────────────────────────────
+  # Windows Editor  (x86_64)
+  # ─────────────────────────────────────────────
+  build-windows-editor:
+    name: 🪟 Windows Editor
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Windows cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            scons \
+            pkg-config \
+            mingw-w64 \
+            yasm
+
+      - name: Build – Windows Editor x86_64
+        run: |
+          scons target=editor platform=windows arch=x86_64 -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-windows-editor-x86_64
+          path: |
+            bin/godot.windows.editor.x86_64.exe
+            bin/godot.windows.editor.x86_64.pdb
+
+  # ─────────────────────────────────────────────
+  # Windows Template – Debug  (x86_64)
+  # ─────────────────────────────────────────────
+  build-windows-template-debug:
+    name: 🪟 Windows Template (Debug)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Windows cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            scons \
+            pkg-config \
+            mingw-w64 \
+            yasm
+
+      - name: Build – Windows Template Debug x86_64
+        run: |
+          scons target=template_debug debug_symbols=yes platform=windows arch=x86_64 -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-windows-template-debug-x86_64
+          path: |
+            bin/godot.windows.template_debug.x86_64.exe
+            bin/godot.windows.template_debug.x86_64.pdb
+
+  # ─────────────────────────────────────────────
+  # Windows Template – Release  (x86_64)
+  # ─────────────────────────────────────────────
+  build-windows-template-release:
+    name: 🪟 Windows Template (Release)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Windows cross-compilation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            scons \
+            pkg-config \
+            mingw-w64 \
+            yasm
+
+      - name: Build – Windows Template Release x86_64
+        run: |
+          scons target=template_release debug_symbols=yes platform=windows arch=x86_64 -j$(nproc)
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-windows-template-release-x86_64
+          path: |
+            bin/godot.windows.template_release.x86_64.exe
+            bin/godot.windows.template_release.x86_64.pdb

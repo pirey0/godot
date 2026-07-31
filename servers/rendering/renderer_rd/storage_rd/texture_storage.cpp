@@ -3011,15 +3011,10 @@ void TextureStorage::update_decal_atlas() {
 
 	decal_atlas.dirty = false;
 
-	if (decal_atlas.texture.is_valid()) {
-		RD::get_singleton()->free_rid(decal_atlas.texture);
-		decal_atlas.texture = RID();
-		decal_atlas.texture_srgb = RID();
-		decal_atlas.texture_mipmaps.clear();
-	}
-
+	// Use border as the default size so there's enough mipmaps available.
 	int border = 1 << decal_atlas.mipmaps;
-
+	int new_atlas_width = border;
+	int new_atlas_height = border;
 	if (decal_atlas.textures.size()) {
 		//generate atlas
 		Vector<DecalAtlas::SortItem> itemsv;
@@ -3107,8 +3102,8 @@ void TextureStorage::update_decal_atlas() {
 			base_size *= 2;
 		}
 
-		decal_atlas.size.width = base_size * border;
-		decal_atlas.size.height = nearest_power_of_2_templated(atlas_height * border);
+		new_atlas_width = base_size * border;
+		new_atlas_height = nearest_power_of_2_templated(atlas_height * border);
 
 		for (int i = 0; i < item_count; i++) {
 			DecalAtlas::Texture *t = decal_atlas.textures.getptr(items[i].texture);
@@ -3118,52 +3113,60 @@ void TextureStorage::update_decal_atlas() {
 			t->uv_rect.position /= Size2(decal_atlas.size);
 			t->uv_rect.size /= Size2(decal_atlas.size);
 		}
-	} else {
-		//use border as size, so it at least has enough mipmaps
-		decal_atlas.size.width = border;
-		decal_atlas.size.height = border;
 	}
 
-	//blit textures
+	if (new_atlas_width != decal_atlas.size.width || new_atlas_height != decal_atlas.size.height) {
+		// Only recreate the texture if it's a different size than the existing one.
+		decal_atlas.size.width = new_atlas_width;
+		decal_atlas.size.height = new_atlas_height;
 
-	RD::TextureFormat tformat;
-	tformat.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
-	tformat.width = decal_atlas.size.width;
-	tformat.height = decal_atlas.size.height;
-	tformat.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_CAN_COPY_TO_BIT;
-	tformat.texture_type = RD::TEXTURE_TYPE_2D;
-	tformat.mipmaps = decal_atlas.mipmaps;
-	tformat.shareable_formats.push_back(RD::DATA_FORMAT_R8G8B8A8_UNORM);
-	tformat.shareable_formats.push_back(RD::DATA_FORMAT_R8G8B8A8_SRGB);
-
-	decal_atlas.texture = RD::get_singleton()->texture_create(tformat, RD::TextureView());
-	RD::get_singleton()->set_resource_name(decal_atlas.texture, "Decal Atlas");
-	RD::get_singleton()->texture_clear(decal_atlas.texture, Color(0, 0, 0, 0), 0, decal_atlas.mipmaps, 0, 1);
-
-	{
-		//create the framebuffer
-
-		Size2i s = decal_atlas.size;
-
-		for (int i = 0; i < decal_atlas.mipmaps; i++) {
-			DecalAtlas::MipMap mm;
-			mm.texture = RD::get_singleton()->texture_create_shared_from_slice(RD::TextureView(), decal_atlas.texture, 0, i);
-			Vector<RID> fb;
-			fb.push_back(mm.texture);
-			mm.fb = RD::get_singleton()->framebuffer_create(fb);
-			mm.size = s;
-			decal_atlas.texture_mipmaps.push_back(mm);
-
-			s = Vector2i(s.width >> 1, s.height >> 1).maxi(1);
+		if (decal_atlas.texture.is_valid()) {
+			RD::get_singleton()->free_rid(decal_atlas.texture);
+			decal_atlas.texture = RID();
+			decal_atlas.texture_srgb = RID();
+			decal_atlas.texture_mipmaps.clear();
 		}
+
+		RD::TextureFormat tformat;
+		tformat.format = RD::DATA_FORMAT_R8G8B8A8_UNORM;
+		tformat.width = decal_atlas.size.width;
+		tformat.height = decal_atlas.size.height;
+		tformat.usage_bits = RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_CAN_COPY_TO_BIT;
+		tformat.texture_type = RD::TEXTURE_TYPE_2D;
+		tformat.mipmaps = decal_atlas.mipmaps;
+		tformat.shareable_formats.push_back(RD::DATA_FORMAT_R8G8B8A8_UNORM);
+		tformat.shareable_formats.push_back(RD::DATA_FORMAT_R8G8B8A8_SRGB);
+
+		decal_atlas.texture = RD::get_singleton()->texture_create(tformat, RD::TextureView());
+		RD::get_singleton()->set_resource_name(decal_atlas.texture, "Decal Atlas");
+		RD::get_singleton()->texture_clear(decal_atlas.texture, Color(0, 0, 0, 0), 0, decal_atlas.mipmaps, 0, 1);
+
 		{
-			//create the SRGB variant
-			RD::TextureView rd_view;
-			rd_view.format_override = RD::DATA_FORMAT_R8G8B8A8_SRGB;
-			decal_atlas.texture_srgb = RD::get_singleton()->texture_create_shared(rd_view, decal_atlas.texture);
+			//create the framebuffer
+
+			Size2i s = decal_atlas.size;
+
+			for (int i = 0; i < decal_atlas.mipmaps; i++) {
+				DecalAtlas::MipMap mm;
+				mm.texture = RD::get_singleton()->texture_create_shared_from_slice(RD::TextureView(), decal_atlas.texture, 0, i);
+				Vector<RID> fb;
+				fb.push_back(mm.texture);
+				mm.fb = RD::get_singleton()->framebuffer_create(fb);
+				mm.size = s;
+				decal_atlas.texture_mipmaps.push_back(mm);
+
+				s = Vector2i(s.width >> 1, s.height >> 1).maxi(1);
+			}
+			{
+				//create the SRGB variant
+				RD::TextureView rd_view;
+				rd_view.format_override = RD::DATA_FORMAT_R8G8B8A8_SRGB;
+				decal_atlas.texture_srgb = RD::get_singleton()->texture_create_shared(rd_view, decal_atlas.texture);
+			}
 		}
 	}
 
+	// Blit textures to atlas.
 	RID prev_texture;
 	for (int i = 0; i < decal_atlas.texture_mipmaps.size(); i++) {
 		const DecalAtlas::MipMap &mm = decal_atlas.texture_mipmaps[i];

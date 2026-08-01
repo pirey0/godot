@@ -743,6 +743,25 @@ Ref<Resource> ResourceLoader::load(const String &p_path, const String &p_type_hi
 	return res;
 }
 
+Ref<Resource> ResourceLoader::load_inline(const String &p_path, const String &p_type_hint, ResourceFormatLoader::CacheMode p_cache_mode, Error *r_error) {
+	if (r_error) {
+		*r_error = OK;
+	}
+
+	// Unlike load(), always run on the calling thread, even from inside a
+	// WorkerThreadPool task. See the declaration in resource_loader.h for why.
+	Ref<LoadToken> load_token = _load_start(p_path, p_type_hint, LOAD_THREAD_FROM_CURRENT, p_cache_mode);
+	if (load_token.is_null()) {
+		if (r_error) {
+			*r_error = FAILED;
+		}
+		return Ref<Resource>();
+	}
+
+	Ref<Resource> res = _load_complete(*load_token.ptr(), r_error);
+	return res;
+}
+
 Ref<ResourceLoader::LoadToken> ResourceLoader::_load_start(const String &p_path, const String &p_type_hint, LoadThreadMode p_thread_mode, ResourceFormatLoader::CacheMode p_cache_mode, bool p_for_user) {
 	String local_path = _validate_local_path(p_path);
 	ERR_FAIL_COND_V(local_path.is_empty(), Ref<ResourceLoader::LoadToken>());

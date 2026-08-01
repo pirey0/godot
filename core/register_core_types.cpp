@@ -43,6 +43,7 @@
 #include "core/input/input.h"
 #include "core/input/input_map.h"
 #include "core/input/shortcut.h"
+#include "core/io/batch/batch_threaded_resource_loader.h"
 #include "core/io/config_file.h"
 #include "core/io/dir_access.h"
 #include "core/io/dtls_server.h"
@@ -112,6 +113,7 @@ static CoreBind::Geometry2D *_geometry_2d = nullptr;
 static CoreBind::Geometry3D *_geometry_3d = nullptr;
 
 static WorkerThreadPool *worker_thread_pool = nullptr;
+static BatchThreadedResourceLoader *batch_threaded_resource_loader = nullptr;
 
 extern Mutex _global_mutex;
 
@@ -219,6 +221,9 @@ void register_core_types() {
 	GDREGISTER_CLASS(UDPServer);
 
 	GDREGISTER_ABSTRACT_CLASS(WorkerThreadPool);
+
+	GDREGISTER_CLASS(BatchLoadToken);
+	GDREGISTER_ABSTRACT_CLASS(BatchThreadedResourceLoader);
 
 	ClassDB::register_custom_instance_class<HTTPClient>();
 
@@ -339,6 +344,7 @@ void register_core_types() {
 	GDREGISTER_NATIVE_STRUCT(ScriptLanguageExtensionProfilingInfo, "StringName signature;uint64_t call_count;uint64_t total_time;uint64_t self_time");
 
 	worker_thread_pool = memnew(WorkerThreadPool);
+	batch_threaded_resource_loader = memnew(BatchThreadedResourceLoader);
 
 	OS::get_singleton()->benchmark_end_measure("Core", "Register Types");
 }
@@ -378,6 +384,7 @@ void register_core_singletons() {
 	Engine::get_singleton()->add_singleton(Engine::Singleton("GDExtensionManager", GDExtensionManager::get_singleton()));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("ResourceUID", ResourceUID::get_singleton()));
 	Engine::get_singleton()->add_singleton(Engine::Singleton("WorkerThreadPool", worker_thread_pool));
+	Engine::get_singleton()->add_singleton(Engine::Singleton("BatchThreadedResourceLoader", batch_threaded_resource_loader));
 
 	OS::get_singleton()->benchmark_end_measure("Core", "Register Singletons");
 }
@@ -410,6 +417,7 @@ void unregister_core_types() {
 
 	// Destroy singletons in reverse order to ensure dependencies are not broken.
 
+	memdelete(batch_threaded_resource_loader);
 	memdelete(worker_thread_pool);
 
 	memdelete(_engine_debugger);

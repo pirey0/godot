@@ -47,13 +47,13 @@ class MeshStorage : public RendererMeshStorage {
 private:
 	static MeshStorage *singleton;
 
-	mutable RID_Owner<DummyMesh> mesh_owner;
+	mutable RID_Owner<DummyMesh, true> mesh_owner;
 
 	struct DummyMultiMesh {
 		PackedFloat32Array buffer;
 	};
 
-	mutable RID_Owner<DummyMultiMesh> multimesh_owner;
+	mutable RID_Owner<DummyMultiMesh, true> multimesh_owner;
 
 public:
 	static MeshStorage *get_singleton() { return singleton; }
@@ -220,7 +220,7 @@ public:
 
 	/* DEBUG */
 
-	virtual void resource_debug_usage(List<RS::ResourceInfo> *r_info) const override {};
+	virtual void resource_debug_usage(List<RS::ResourceInfo> *r_info) const override {}
 };
 
 } // namespace RendererDummy

@@ -252,6 +252,17 @@ public:
 	static void resource_changed_emit(Resource *p_source);
 
 	static Ref<Resource> load(const String &p_path, const String &p_type_hint = "", ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE, Error *r_error = nullptr);
+
+	// Like load(), but always loads on the calling thread (LOAD_THREAD_FROM_CURRENT),
+	// even when the caller is itself running inside a WorkerThreadPool task. load()
+	// deliberately switches to LOAD_THREAD_SPAWN_SINGLE in that situation, registering
+	// a second task in the same pool for the actual work -- correct for a single
+	// incidental load, but severe overhead when a caller (e.g. a batch loader already
+	// managing its own parallelism via the pool) does this for every item in a large,
+	// dependency-ordered set. Only use this when the caller can guarantee the resource's
+	// own dependencies are already loaded, so the load completes without needing to wait.
+	static Ref<Resource> load_inline(const String &p_path, const String &p_type_hint = "", ResourceFormatLoader::CacheMode p_cache_mode = ResourceFormatLoader::CACHE_MODE_REUSE, Error *r_error = nullptr);
+
 	static bool exists(const String &p_path, const String &p_type_hint = "");
 
 	static void get_recognized_extensions_for_type(const String &p_type, List<String> *p_extensions);

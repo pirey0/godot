@@ -31,6 +31,7 @@
 #include "pipeline_cache_rd.h"
 
 #include "core/os/memory.h"
+#include "core/profiling/profiling.h"
 
 RID PipelineCacheRD::_generate_version(RD::VertexFormatID p_vertex_format_id, RD::FramebufferFormatID p_framebuffer_format_id, bool p_wireframe, uint32_t p_render_pass, uint32_t p_bool_specializations) {
 	RD::PipelineMultisampleState multisample_state_version = multisample_state;
@@ -55,6 +56,12 @@ RID PipelineCacheRD::_generate_version(RD::VertexFormatID p_vertex_format_id, RD
 		bool_index++;
 	}
 
+#ifdef GODOT_USE_TRACY
+	CharString profile_pipeline_key_utf8 = vformat("shader_rid=%s wireframe=%d render_pass=%d bool_spec=%d vertex_fmt=%d fb_fmt=%d",
+			shader, (int)wireframe, p_render_pass, p_bool_specializations, (int64_t)p_vertex_format_id, (int64_t)p_framebuffer_format_id)
+												   .utf8();
+	GodotProfileZoneDynamic("PipelineCacheRD::_generate_version", profile_pipeline_key_utf8.get_data(), profile_pipeline_key_utf8.length());
+#endif
 	RID pipeline = RD::get_singleton()->render_pipeline_create(shader, p_framebuffer_format_id, p_vertex_format_id, render_primitive, raster_state_version, multisample_state_version, depth_stencil_state, blend_state, dynamic_state_flags, p_render_pass, specialization_constants);
 	ERR_FAIL_COND_V(pipeline.is_null(), RID());
 	versions = static_cast<Version *>(memrealloc(versions, sizeof(Version) * (version_count + 1)));

@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/io/marshalls.h"
+#include "core/profiling/profiling.h"
 #include "vulkan_hooks.h"
 
 #include "thirdparty/misc/smolv.h"
@@ -5752,6 +5753,10 @@ RDD::PipelineID RenderingDeviceDriverVulkan::render_pipeline_create(
 	uint64_t pipeline_start_time = OS::get_singleton()->get_ticks_usec();
 #endif
 
+#ifdef GODOT_USE_TRACY
+	CharString profile_shader_name_utf8 = shader_info->name.utf8();
+	GodotProfileZoneDynamic("Vulkan: vkCreateGraphicsPipelines", profile_shader_name_utf8.get_data(), profile_shader_name_utf8.length());
+#endif
 	VkPipeline vk_pipeline = VK_NULL_HANDLE;
 	VkResult err = vkCreateGraphicsPipelines(vk_device, pipelines_cache.vk_cache, 1, &pipeline_create_info, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE), &vk_pipeline);
 	ERR_FAIL_COND_V_MSG(err, PipelineID(), "vkCreateGraphicsPipelines failed with error " + itos(err) + ".");
@@ -5871,6 +5876,10 @@ RDD::PipelineID RenderingDeviceDriverVulkan::compute_pipeline_create(ShaderID p_
 		pipeline_create_info.stage.pSpecializationInfo = specialization_info;
 	}
 
+#ifdef GODOT_USE_TRACY
+	CharString profile_shader_name_utf8 = shader_info->name.utf8();
+	GodotProfileZoneDynamic("Vulkan: vkCreateComputePipelines", profile_shader_name_utf8.get_data(), profile_shader_name_utf8.length());
+#endif
 	VkPipeline vk_pipeline = VK_NULL_HANDLE;
 	VkResult err = vkCreateComputePipelines(vk_device, pipelines_cache.vk_cache, 1, &pipeline_create_info, VKC::get_allocation_callbacks(VK_OBJECT_TYPE_PIPELINE), &vk_pipeline);
 	ERR_FAIL_COND_V_MSG(err, PipelineID(), "vkCreateComputePipelines failed with error " + itos(err) + ".");

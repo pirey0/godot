@@ -39,6 +39,7 @@
 #include "core/os/condition_variable.h"
 #include "core/os/os.h"
 #include "core/os/safe_binary_mutex.h"
+#include "core/profiling/profiling.h"
 #include "core/string/print_string.h"
 #include "core/string/translation_server.h"
 #include "core/templates/rb_set.h"
@@ -282,7 +283,13 @@ Ref<Resource> ResourceLoader::_load(const String &p_path, const String &p_origin
 			continue;
 		}
 		found = true;
-		res = loader[i]->load(p_path, original_path, r_error, p_use_sub_threads, r_progress, p_cache_mode);
+		{
+#ifdef GODOT_USE_TRACY
+			CharString profile_path_utf8 = p_path.utf8();
+			GodotProfileZoneDynamic("ResourceFormatLoader::load", profile_path_utf8.get_data(), profile_path_utf8.length());
+#endif
+			res = loader[i]->load(p_path, original_path, r_error, p_use_sub_threads, r_progress, p_cache_mode);
+		}
 		if (res.is_valid()) {
 			break;
 		}
@@ -332,6 +339,11 @@ Ref<Resource> ResourceLoader::_load(const String &p_path, const String &p_origin
 // The load task token must be manually re-referenced before this is called, which includes threaded runs.
 void ResourceLoader::_run_load_task(void *p_userdata) {
 	ThreadLoadTask &load_task = *(ThreadLoadTask *)p_userdata;
+#ifdef GODOT_USE_TRACY
+	CharString profile_path_utf8 = load_task.local_path.utf8();
+	GodotProfileZoneDynamic("ResourceLoader::_run_load_task", profile_path_utf8.get_data(), profile_path_utf8.length());
+#endif
+
 	int thread_index = WorkerThreadPool::get_singleton()->get_thread_index();
 	String thread_waiting_on_backup;
 
@@ -1057,6 +1069,10 @@ Ref<Resource> ResourceLoader::_load_complete_inner(LoadToken &p_load_token, Erro
 
 			bool loader_is_wtp = load_task.task_id != 0;
 			if (loader_is_wtp) {
+#ifdef GODOT_USE_TRACY
+				CharString profile_path_utf8 = load_task.local_path.utf8();
+				GodotProfileZoneDynamic("ResourceLoader: wait on dependency (WorkerThreadPool)", profile_path_utf8.get_data(), profile_path_utf8.length());
+#endif
 				// Loading thread is in the worker pool.
 				p_thread_load_lock.temp_unlock();
 
@@ -1076,6 +1092,10 @@ Ref<Resource> ResourceLoader::_load_complete_inner(LoadToken &p_load_token, Erro
 
 				DEV_ASSERT(load_task.status == THREAD_LOAD_FAILED || load_task.status == THREAD_LOAD_LOADED);
 			} else if (load_task.need_wait) {
+#ifdef GODOT_USE_TRACY
+				CharString profile_path_utf8 = load_task.local_path.utf8();
+				GodotProfileZoneDynamic("ResourceLoader: wait on dependency (cond_var)", profile_path_utf8.get_data(), profile_path_utf8.length());
+#endif
 				// Loading thread is main or user thread.
 				if (!load_task.cond_var) {
 					load_task.cond_var = memnew(ConditionVariable);

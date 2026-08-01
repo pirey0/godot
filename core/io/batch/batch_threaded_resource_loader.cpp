@@ -71,6 +71,9 @@ void BatchThreadedResourceLoader::_run() {
 }
 
 void BatchThreadedResourceLoader::_load_path(const String &p_path) {
+	CharString profile_path_utf8 = p_path.utf8();
+	GodotProfileZoneDynamic("BatchThreadedResourceLoader::_load_path", profile_path_utf8.get_data(), profile_path_utf8.length());
+
 	// load_inline(), not load(): this may run inside a WorkerThreadPool group task,
 	// and load() would otherwise register a second, competing task in the same
 	// pool for every single item. See resource_loader.h for the full rationale.

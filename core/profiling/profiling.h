@@ -78,6 +78,12 @@ const SourceLocationData *intern_source_location(const void *p_function_ptr, con
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line) \
 	tracy::ScopedZone __godot_tracy_zone_system_call(tracy::intern_source_location(m_ptr, m_file, m_function, m_name, m_line, false))
 
+// Defines a profile zone with dynamic text (e.g. a resource path) attached, in one step.
+#define _GodotProfileZoneDynamicImpl(m_var, m_zone_name, m_text, m_size) \
+	ZoneNamedN(m_var, m_zone_name, true);                                \
+	m_var.Text(m_text, m_size)
+#define GodotProfileZoneDynamic(m_zone_name, m_text, m_size) _GodotProfileZoneDynamicImpl(GD_UNIQUE_NAME(__godot_tracy_szone_dyn_), m_zone_name, m_text, m_size)
+
 // Memory allocation
 #ifdef GODOT_PROFILER_TRACK_MEMORY
 #define GodotProfileAlloc(m_ptr, m_size)                       \
@@ -127,6 +133,8 @@ struct PerfettoGroupedEventEnder {
 
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
+
+#define GodotProfileZoneDynamic(m_zone_name, m_text, m_size) GodotProfileZone(m_zone_name)
 
 #define GodotProfileAlloc(m_ptr, m_size)
 #define GodotProfileFree(m_ptr)
@@ -187,6 +195,8 @@ private:
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
 
+#define GodotProfileZoneDynamic(m_zone_name, m_text, m_size) GodotProfileZone(m_zone_name)
+
 // Instruments has its own memory profiling, so these are no-ops.
 #define GodotProfileAlloc(m_ptr, m_size)
 #define GodotProfileFree(m_ptr)
@@ -224,5 +234,7 @@ void godot_cleanup_profiler();
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 // Define a zone for a system call from a script (dynamic source location).
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
+// Defines a profile zone with dynamic text (e.g. a resource path) attached, in one step.
+#define GodotProfileZoneDynamic(m_zone_name, m_text, m_size)
 
 #endif

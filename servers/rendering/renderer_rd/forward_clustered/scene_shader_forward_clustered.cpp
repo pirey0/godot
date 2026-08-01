@@ -31,6 +31,7 @@
 #include "scene_shader_forward_clustered.h"
 #include "core/config/project_settings.h"
 #include "core/math/math_defs.h"
+#include "core/profiling/profiling.h"
 #include "render_forward_clustered.h"
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/material_storage.h"
@@ -498,6 +499,14 @@ void SceneShaderForwardClustered::ShaderData::_create_pipeline(PipelineKey p_pip
 	RID shader_rid = get_shader_variant(p_pipeline_key.version, p_pipeline_key.color_pass_flags, p_pipeline_key.ubershader);
 	ERR_FAIL_COND(shader_rid.is_null());
 
+#ifdef GODOT_USE_TRACY
+	CharString profile_pipeline_key_utf8 = vformat("shader_path=%s version=%d ubershader=%d color_pass_flags=%d cull_mode=%d primitive=%d spec=[%d,%d,%d] hash=%ud",
+			path.is_empty() ? "<no path hint>" : path, (int)p_pipeline_key.version, p_pipeline_key.ubershader, p_pipeline_key.color_pass_flags, (int)p_pipeline_key.cull_mode, (int)p_pipeline_key.primitive_type,
+			p_pipeline_key.shader_specialization.packed_0, p_pipeline_key.shader_specialization.packed_1, p_pipeline_key.shader_specialization.packed_2,
+			p_pipeline_key.hash())
+												   .utf8();
+	GodotProfileZoneDynamic("SceneForwardClustered: render_pipeline_create", profile_pipeline_key_utf8.get_data(), profile_pipeline_key_utf8.length());
+#endif
 	RID pipeline = RD::get_singleton()->render_pipeline_create(shader_rid, p_pipeline_key.framebuffer_format_id, p_pipeline_key.vertex_format_id, primitive_rd, raster_state, multisample_state, depth_stencil_state, blend_state, 0, 0, specialization_constants);
 	ERR_FAIL_COND(pipeline.is_null());
 

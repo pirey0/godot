@@ -247,6 +247,9 @@ bool DependencyManifest::try_load_cache(const String &p_root, DependencyManifest
 }
 
 DependencyManifest DependencyManifest::load_or_build(const String &p_root) {
+	CharString profile_root_utf8 = p_root.utf8();
+	GodotProfileZoneDynamic("DependencyManifest::load_or_build", profile_root_utf8.get_data(), profile_root_utf8.length());
+
 	DependencyManifest manifest;
 	if (try_load_cache(p_root, manifest)) {
 		return manifest;

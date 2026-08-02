@@ -48,6 +48,9 @@
 #include "core/string/string_name.h"
 
 #define TRACY_ENABLE
+// Only record while a profiler is connected (no unbounded buffering from launch).
+// Must stay in sync with the TRACY_ON_DEMAND define on env_tracy in this folder's SCsub.
+#define TRACY_ON_DEMAND
 
 #include <tracy/Tracy.hpp>
 

@@ -30,6 +30,7 @@
 
 #include "render_forward_clustered.h"
 #include "core/config/project_settings.h"
+#include "core/profiling/profiling.h"
 #include "servers/rendering/renderer_rd/environment/fog.h"
 #include "servers/rendering/renderer_rd/framebuffer_cache_rd.h"
 #include "servers/rendering/renderer_rd/storage_rd/light_storage.h"
@@ -678,6 +679,7 @@ void RenderForwardClustered::_render_list(RenderingDevice::DrawListID p_draw_lis
 }
 
 void RenderForwardClustered::_render_list_with_draw_list(RenderListParameters *p_params, RID p_framebuffer, BitField<RD::DrawFlags> p_draw_flags, const Vector<Color> &p_clear_color_values, float p_clear_depth_value, uint32_t p_clear_stencil_value, const Rect2 &p_region) {
+	GodotProfileZone("RenderForwardClustered::_render_list_with_draw_list");
 	RD::FramebufferFormatID fb_format = RD::get_singleton()->framebuffer_get_format(p_framebuffer);
 	p_params->framebuffer_format = fb_format;
 
@@ -797,6 +799,7 @@ void RenderForwardClustered::SceneState::grow_instance_buffer(RenderListType p_r
 }
 
 void RenderForwardClustered::_fill_instance_data(RenderListType p_render_list, int *p_render_info, uint32_t p_offset, int32_t p_max_elements, bool p_update_buffer) {
+	GodotProfileZone("RenderForwardClustered::_fill_instance_data");
 	RenderList *rl = &render_list[p_render_list];
 	uint32_t element_total = p_max_elements >= 0 ? uint32_t(p_max_elements) : rl->elements.size();
 
@@ -908,6 +911,7 @@ _FORCE_INLINE_ static uint32_t _indices_to_primitives(RS::PrimitiveType p_primit
 	return (p_indices - subtractor[p_primitive]) / divisor[p_primitive];
 }
 void RenderForwardClustered::_fill_render_list(RenderListType p_render_list, const RenderDataRD *p_render_data, PassMode p_pass_mode, bool p_using_sdfgi, bool p_using_opaque_gi, bool p_using_motion_pass, bool p_append) {
+	GodotProfileZone("RenderForwardClustered::_fill_render_list");
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
 	uint64_t frame = RSG::rasterizer->get_frame_number();
 
@@ -1489,6 +1493,7 @@ void RenderForwardClustered::_copy_framebuffer_to_ss_effects(Ref<RenderSceneBuff
 }
 
 void RenderForwardClustered::_pre_opaque_render(RenderDataRD *p_render_data, bool p_use_ssao, bool p_use_ssil, bool p_use_ssr, bool p_use_gi, const RID *p_normal_roughness_slices, RID p_voxel_gi_buffer) {
+	GodotProfileZone("rfc: pre-opaque (shadows+cluster+fog+SS effects)");
 	// Render shadows while GI is rendering, due to how barriers are handled, this should happen at the same time
 	RendererRD::LightStorage *light_storage = RendererRD::LightStorage::get_singleton();
 	RendererRD::TextureStorage *texture_storage = RendererRD::TextureStorage::get_singleton();
@@ -1678,6 +1683,10 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 	Ref<RenderSceneBuffersRD> rb = p_render_data->render_buffers;
 	ERR_FAIL_COND(rb.is_null());
+
+	// Tag each viewport's render with its target resolution so the calls are distinguishable in the profiler.
+	CharString _rs_label = (itos(rb->get_internal_size().x) + "x" + itos(rb->get_internal_size().y)).utf8();
+	GodotProfileZoneDynamic("RenderForwardClustered::_render_scene", _rs_label.get_data(), (size_t)_rs_label.length());
 	Ref<RenderBufferDataForwardClustered> rb_data;
 	if (rb->has_custom_data(RB_SCOPE_FORWARD_CLUSTERED)) {
 		// Our forward clustered custom data buffer will only be available when we're rendering our normal view.
@@ -2267,7 +2276,10 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 		RD::get_singleton()->draw_command_begin_label("Draw Sky");
 		RD::DrawListID draw_list = RD::get_singleton()->draw_list_begin(color_only_framebuffer, RD::DRAW_DEFAULT_ALL, Vector<Color>(), 1.0f, 0u, p_render_data->render_region);
 
-		sky.draw_sky(draw_list, rb, p_render_data->environment, color_only_framebuffer, time, sky_luminance_multiplier, sky_brightness_multiplier);
+		{
+			GodotProfileZone("rfc: sky draw");
+			sky.draw_sky(draw_list, rb, p_render_data->environment, color_only_framebuffer, time, sky_luminance_multiplier, sky_brightness_multiplier);
+		}
 
 		RD::get_singleton()->draw_list_end();
 		RD::get_singleton()->draw_command_end_label();
@@ -2431,6 +2443,7 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	}
 
 	if (rb_data.is_valid() && (using_upscaling || using_taa)) {
+		GodotProfileZone("rfc: upscale (FSR2/TAA/MFX)");
 		if (scale_type == SCALE_FSR2) {
 			rb_data->ensure_fsr2(fsr2_effect);
 
@@ -2519,7 +2532,10 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 
 		RENDER_TIMESTAMP("Tonemap");
 
-		_render_buffers_post_process_and_tonemap(p_render_data);
+		{
+			GodotProfileZone("rfc: post-process + tonemap");
+			_render_buffers_post_process_and_tonemap(p_render_data);
+		}
 	}
 
 	if (rb_data.is_valid()) {

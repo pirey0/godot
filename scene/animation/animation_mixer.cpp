@@ -33,6 +33,7 @@
 
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
+#include "core/profiling/profiling.h"
 #include "core/string/string_name.h"
 #include "scene/2d/audio_stream_player_2d.h"
 #include "scene/animation/animation_player.h"
@@ -999,12 +1000,17 @@ bool AnimationMixer::_update_caches() {
 /* -------------------------------------------- */
 
 void AnimationMixer::_process_animation(double p_delta, bool p_update_only) {
+	GodotProfileZone("AnimationMixer::_process_animation");
+	GodotProfileZoneGroupedFirst(_profile_zone, "blend init + pre-process");
 	_blend_init();
 	if (cache_valid && _blend_pre_process(p_delta, track_count, track_map)) {
 		_blend_capture(p_delta);
+		GodotProfileZoneGrouped(_profile_zone, "blend calc weight");
 		_blend_calc_total_weight();
+		GodotProfileZoneGrouped(_profile_zone, "blend process");
 		_blend_process(p_delta, p_update_only);
 		clear_animation_instances();
+		GodotProfileZoneGrouped(_profile_zone, "blend apply");
 		_blend_apply();
 		_blend_post_process();
 		emit_signal(SNAME("mixer_applied"));

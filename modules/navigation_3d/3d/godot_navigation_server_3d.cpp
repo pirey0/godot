@@ -31,6 +31,7 @@
 #include "godot_navigation_server_3d.h"
 
 #include "core/os/mutex.h"
+#include "core/profiling/profiling.h"
 #include "scene/main/node.h"
 
 #include "nav_mesh_generator_3d.h"
@@ -1405,7 +1406,9 @@ void GodotNavigationServer3D::physics_process(double p_delta_time) {
 	int _new_pm_obstacle_count = 0;
 
 	MutexLock lock(operations_mutex);
+	GodotProfileZone("NavigationServer3D::physics_process");
 	for (uint32_t i(0); i < active_maps.size(); i++) {
+		GodotProfileZone("map sync + step");
 		active_maps[i]->sync();
 		active_maps[i]->step(p_delta_time);
 		active_maps[i]->dispatch_callbacks();

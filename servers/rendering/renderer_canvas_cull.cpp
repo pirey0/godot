@@ -33,6 +33,7 @@
 #include "core/config/project_settings.h"
 #include "core/math/geometry_2d.h"
 #include "core/math/transform_interpolator.h"
+#include "core/profiling/profiling.h"
 #include "renderer_viewport.h"
 #include "rendering_server_default.h"
 #include "rendering_server_globals.h"
@@ -69,6 +70,8 @@ void RendererCanvasCull::_dependency_deleted(const RID &p_dependency, Dependency
 
 void RendererCanvasCull::_render_canvas_item_tree(RID p_to_render_target, Canvas::ChildItem *p_child_items, int p_child_item_count, const Transform2D &p_transform, const Rect2 &p_clip_rect, const Color &p_modulate, RendererCanvasRender::Light *p_lights, RendererCanvasRender::Light *p_directional_lights, RenderingServer::CanvasItemTextureFilter p_default_filter, RenderingServer::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_vertices_to_pixel, uint32_t p_canvas_cull_mask, RenderingMethod::RenderInfo *r_render_info) {
 	RENDER_TIMESTAMP("Cull CanvasItem Tree");
+	GodotProfileZone("RendererCanvasCull::_render_canvas_item_tree");
+	GodotProfileZoneGroupedFirst(_profile_zone, "cull CanvasItem tree");
 
 	// This is used to avoid passing the camera transform down the rendering
 	// function calls, as it won't be used in 99% of cases, because the camera
@@ -99,6 +102,7 @@ void RendererCanvasCull::_render_canvas_item_tree(RID p_to_render_target, Canvas
 	}
 
 	RENDER_TIMESTAMP("Render CanvasItems");
+	GodotProfileZoneGrouped(_profile_zone, "canvas_render_items");
 
 	bool sdf_flag;
 	RSG::canvas_render->canvas_render_items(p_to_render_target, list, p_modulate, p_lights, p_directional_lights, p_transform, p_default_filter, p_default_repeat, p_snap_2d_vertices_to_pixel, sdf_flag, r_render_info);
@@ -493,6 +497,7 @@ void RendererCanvasCull::_cull_canvas_item(Item *p_canvas_item, const Transform2
 
 void RendererCanvasCull::render_canvas(RID p_render_target, Canvas *p_canvas, const Transform2D &p_transform, RendererCanvasRender::Light *p_lights, RendererCanvasRender::Light *p_directional_lights, const Rect2 &p_clip_rect, RenderingServer::CanvasItemTextureFilter p_default_filter, RenderingServer::CanvasItemTextureRepeat p_default_repeat, bool p_snap_2d_transforms_to_pixel, bool p_snap_2d_vertices_to_pixel, uint32_t canvas_cull_mask, RenderingMethod::RenderInfo *r_render_info) {
 	RENDER_TIMESTAMP("> Render Canvas");
+	GodotProfileZone("RendererCanvasCull::render_canvas");
 
 	sdf_used = false;
 	snapping_2d_transforms_to_pixel = p_snap_2d_transforms_to_pixel;

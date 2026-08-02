@@ -626,6 +626,8 @@ void SceneTree::iteration_prepare() {
 }
 
 bool SceneTree::physics_process(double p_time) {
+	GodotProfileZone("SceneTree::physics_process");
+	GodotProfileZoneGroupedFirst(_profile_zone, "MainLoop::physics_process");
 	current_frame++;
 
 	flush_transform_notifications();
@@ -641,11 +643,14 @@ bool SceneTree::physics_process(double p_time) {
 	call_group(SNAME("_picking_viewports"), SNAME("_process_picking"));
 #endif // !defined(PHYSICS_2D_DISABLED) || !defined(PHYSICS_3D_DISABLED)
 
+	GodotProfileZoneGrouped(_profile_zone, "_process (nodes)");
 	_process(true);
 
+	GodotProfileZoneGrouped(_profile_zone, "ugc + message queue");
 	_flush_ugc();
 	MessageQueue::get_singleton()->flush(); //small little hack
 
+	GodotProfileZoneGrouped(_profile_zone, "timers + tweens");
 	process_timers(p_time, true); //go through timers
 	process_tweens(p_time, true);
 
@@ -675,6 +680,8 @@ void SceneTree::iteration_end() {
 }
 
 bool SceneTree::process(double p_time) {
+	GodotProfileZone("SceneTree::process");
+	GodotProfileZoneGroupedFirst(_profile_zone, "MainLoop::process");
 	// First pass of scene tree fixed timestep interpolation.
 	if (get_scene_tree_fti().is_enabled()) {
 		// Special, we need to ensure RenderingServer is up to date
@@ -705,8 +712,10 @@ bool SceneTree::process(double p_time) {
 
 	flush_transform_notifications();
 
+	GodotProfileZoneGrouped(_profile_zone, "_process (nodes)");
 	_process(false);
 
+	GodotProfileZoneGrouped(_profile_zone, "ugc + message queue");
 	_flush_ugc();
 	MessageQueue::get_singleton()->flush(); //small little hack
 	flush_transform_notifications(); //transforms after world update, to avoid unnecessary enter/exit notifications
@@ -715,6 +724,7 @@ bool SceneTree::process(double p_time) {
 		_flush_scene_change();
 	}
 
+	GodotProfileZoneGrouped(_profile_zone, "timers + tweens");
 	process_timers(p_time, false); //go through timers
 	process_tweens(p_time, false);
 

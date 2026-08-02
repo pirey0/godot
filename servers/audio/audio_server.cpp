@@ -36,6 +36,7 @@
 #include "core/io/resource_loader.h"
 #include "core/math/audio_frame.h"
 #include "core/os/os.h"
+#include "core/profiling/profiling.h"
 #include "core/string/string_name.h"
 #include "core/templates/pair.h"
 #include "scene/scene_string_names.h"
@@ -339,6 +340,8 @@ void AudioServer::_driver_process(int p_frames, int32_t *p_buffer) {
 }
 
 void AudioServer::_mix_step() {
+	GodotProfileZone("AudioServer::_mix_step");
+	GodotProfileZoneGroupedFirst(_profile_zone, "mix streams");
 	bool solo_mode = false;
 
 	for (int i = 0; i < buses.size(); i++) {
@@ -538,6 +541,7 @@ void AudioServer::_mix_step() {
 	}
 
 	// Now that all of the buses have their audio sources mixed into them, we can process the effects and bus sends.
+	GodotProfileZoneGrouped(_profile_zone, "bus effects + sends");
 	for (int i = buses.size() - 1; i >= 0; i--) {
 		Bus *bus = buses[i];
 

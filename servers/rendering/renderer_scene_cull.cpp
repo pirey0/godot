@@ -32,6 +32,7 @@
 
 #include "core/config/project_settings.h"
 #include "core/object/worker_thread_pool.h"
+#include "core/profiling/profiling.h"
 #include "rendering_light_culler.h"
 #include "rendering_server_default.h"
 
@@ -3192,6 +3193,8 @@ void RendererSceneCull::_scene_particles_set_view_axis(RID p_particles, const Ve
 }
 
 void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_camera_data, const Ref<RenderSceneBuffers> &p_render_buffers, RID p_environment, RID p_force_camera_attributes, RID p_compositor, uint32_t p_visible_layers, RID p_scenario, RID p_viewport, RID p_shadow_atlas, RID p_reflection_probe, int p_reflection_probe_pass, float p_screen_mesh_lod_threshold, bool p_using_shadows, RenderingMethod::RenderInfo *r_render_info) {
+	GodotProfileZone("RendererSceneCull::_render_scene");
+	GodotProfileZoneGroupedFirst(_profile_zone, "prepare + visibility deps");
 	Instance *render_reflection_probe = instance_owner.get_or_null(p_reflection_probe); //if null, not rendering to it
 
 	// Prepare the light - camera volume culling system.
@@ -3241,6 +3244,8 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 	}
 
 	RENDER_TIMESTAMP("Cull 3D Scene");
+
+	GodotProfileZoneGrouped(_profile_zone, "cull + light setup");
 
 	//rasterizer->set_camera(p_camera_data->main_transform, p_camera_data.main_projection, p_camera_data.is_orthogonal);
 
@@ -3366,6 +3371,8 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 			RSG::mesh_storage->update_mesh_instances();
 		}
 	}
+
+	GodotProfileZoneGrouped(_profile_zone, "shadow + GI setup");
 
 	//render shadows
 
@@ -3581,6 +3588,7 @@ void RendererSceneCull::_render_scene(const RendererSceneRender::CameraData *p_c
 	}
 
 	RENDER_TIMESTAMP("Render 3D Scene");
+	GodotProfileZoneGrouped(_profile_zone, "scene_render->render_scene");
 	scene_render->render_scene(p_render_buffers, p_camera_data, prev_camera_data, load_color_and_depth, skip_post_and_tonemap, scene_cull_result.geometry_instances, scene_cull_result.light_instances, scene_cull_result.reflections, scene_cull_result.voxel_gi_instances, scene_cull_result.decals, scene_cull_result.lightmaps, scene_cull_result.fog_volumes, p_environment, camera_attributes, p_compositor, p_shadow_atlas, occluders_tex, p_reflection_probe.is_valid() ? RID() : scenario->reflection_atlas, p_reflection_probe, p_reflection_probe_pass, p_screen_mesh_lod_threshold, render_shadow_data, max_shadows_used, render_sdfgi_data, cull.sdfgi.region_count, &sdfgi_update_data, r_render_info);
 
 	if (p_viewport.is_valid()) {
@@ -4237,6 +4245,8 @@ void RendererSceneCull::update_dirty_instances() const {
 }
 
 void RendererSceneCull::update() {
+	GodotProfileZone("RendererSceneCull::update");
+	GodotProfileZoneGroupedFirst(_profile_zone, "optimize bvhs");
 	//optimize bvhs
 
 	uint32_t rid_count = scenario_owner.get_rid_count();
@@ -4247,8 +4257,11 @@ void RendererSceneCull::update() {
 		s->indexers[Scenario::INDEXER_GEOMETRY].optimize_incremental(indexer_update_iterations);
 		s->indexers[Scenario::INDEXER_VOLUMES].optimize_incremental(indexer_update_iterations);
 	}
+	GodotProfileZoneGrouped(_profile_zone, "scene_render->update");
 	scene_render->update();
+	GodotProfileZoneGrouped(_profile_zone, "update_dirty_instances");
 	update_dirty_instances();
+	GodotProfileZoneGrouped(_profile_zone, "render_particle_colliders");
 	render_particle_colliders();
 }
 

@@ -34,6 +34,7 @@
 
 #include "core/object/worker_thread_pool.h"
 #include "core/os/os.h"
+#include "core/profiling/profiling.h"
 
 #define BODY_ISLAND_COUNT_RESERVE 128
 #define BODY_ISLAND_SIZE_RESERVE 512
@@ -183,6 +184,8 @@ void GodotStep3D::_check_suspend(const LocalVector<GodotBody3D *> &p_body_island
 }
 
 void GodotStep3D::step(GodotSpace3D *p_space, real_t p_delta) {
+	GodotProfileZone("GodotStep3D::step");
+	GodotProfileZoneGroupedFirst(_profile_zone, "setup + integrate forces");
 	p_space->lock(); // can't access space during this
 
 	p_space->setup(); //update inertias, etc
@@ -232,6 +235,7 @@ void GodotStep3D::step(GodotSpace3D *p_space, real_t p_delta) {
 
 	/* GENERATE CONSTRAINT ISLANDS FOR MOVING AREAS */
 
+	GodotProfileZoneGrouped(_profile_zone, "generate islands");
 	uint32_t island_count = 0;
 
 	const SelfList<GodotArea3D>::List &aml = p_space->get_moved_area_list();
@@ -343,6 +347,7 @@ void GodotStep3D::step(GodotSpace3D *p_space, real_t p_delta) {
 
 	/* SETUP CONSTRAINTS / PROCESS COLLISIONS */
 
+	GodotProfileZoneGrouped(_profile_zone, "setup constraints");
 	uint32_t total_constraint_count = all_constraints.size();
 	WorkerThreadPool::GroupID group_task = WorkerThreadPool::get_singleton()->add_template_group_task(this, &GodotStep3D::_setup_constraint, nullptr, total_constraint_count, -1, true, SNAME("Physics3DConstraintSetup"));
 	WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group_task);
@@ -355,12 +360,15 @@ void GodotStep3D::step(GodotSpace3D *p_space, real_t p_delta) {
 
 	/* PRE-SOLVE CONSTRAINT ISLANDS */
 
+	GodotProfileZoneGrouped(_profile_zone, "pre-solve islands");
 	// WARNING: This doesn't run on threads, because it involves thread-unsafe processing.
 	for (uint32_t island_index = 0; island_index < island_count; ++island_index) {
 		_pre_solve_island(constraint_islands[island_index]);
 	}
 
 	/* SOLVE CONSTRAINT ISLANDS */
+
+	GodotProfileZoneGrouped(_profile_zone, "solve islands");
 
 	// WARNING: `_solve_island` modifies the constraint islands for optimization purpose,
 	// their content is not reliable after these calls and shouldn't be used anymore.
@@ -375,6 +383,7 @@ void GodotStep3D::step(GodotSpace3D *p_space, real_t p_delta) {
 
 	/* INTEGRATE VELOCITIES */
 
+	GodotProfileZoneGrouped(_profile_zone, "integrate velocities + sleep");
 	b = body_list->first();
 	while (b) {
 		const SelfList<GodotBody3D> *n = b->next();

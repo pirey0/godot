@@ -98,7 +98,6 @@ jobs:
 
       - name: Setup Python + SCons
         run: |
-          python3 -m pip install --upgrade pip --break-system-packages
           pip3 install scons requests --break-system-packages
 
       - name: Setup Vulkan SDK

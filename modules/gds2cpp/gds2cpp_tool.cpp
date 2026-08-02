@@ -30,9 +30,19 @@
 
 #include "gds2cpp_tool.h"
 
+#include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
+
+// Load a .gd file as a line vector (1-based via index-1) for comment interleaving.
+static Vector<String> _load_source_lines(const String &p_path) {
+	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ);
+	if (f.is_null()) {
+		return Vector<String>();
+	}
+	return f->get_as_text().replace("\r\n", "\n").split("\n");
+}
 
 String Gds2cppTool::analyze_script(const String &p_path) {
 	Ref<GDScript> gds = ResourceLoader::load(p_path);
@@ -46,7 +56,7 @@ String Gds2cppTool::analyze_script(const String &p_path) {
 	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
 		total++;
 		bool ok = false;
-		String result = E.value->transpile_to_cpp("Data_gen", String(E.key), ok);
+		String result = E.value->transpile_to_cpp("Data_gen", String(E.key), Vector<String>(), ok);
 		if (ok) {
 			ok_count++;
 			report += "  [C++ ] " + String(E.key) + "\n";
@@ -63,11 +73,12 @@ String Gds2cppTool::transpile_script(const String &p_path, const String &p_cpp_c
 	if (gds.is_null()) {
 		return "// ERROR: could not load " + p_path;
 	}
+	Vector<String> src_lines = _load_source_lines(p_path);
 	String out;
 	const HashMap<StringName, GDScriptFunction *> &funcs = gds->get_member_functions();
 	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
 		bool ok = false;
-		String result = E.value->transpile_to_cpp(p_cpp_class, String(E.key), ok);
+		String result = E.value->transpile_to_cpp(p_cpp_class, String(E.key), src_lines, ok);
 		if (ok) {
 			out += result + "\n";
 		} else {

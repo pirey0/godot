@@ -33,6 +33,11 @@
 #include "core/string/ustring.h"
 #include "core/templates/hash_set.h"
 
+// Fetch source line p_ln (1-based); empty if out of range.
+static String _src_line(const Vector<String> &p_lines, int p_ln) {
+	return (p_ln >= 1 && p_ln <= p_lines.size()) ? p_lines[p_ln - 1] : String();
+}
+
 // Map a bytecode address to a C++ `Variant *` expression.
 // self=s[0], nil=s[2], args/locals=s[n]; constants via gf; members via inst.
 static String _addr(int p_addr) {
@@ -109,16 +114,26 @@ static int _instr_size(const int *p_code, int p_ip) {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, bool &r_ok) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, bool &r_ok) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
 	HashSet<int> jump_targets;
 	String trace;
+	int min_line = 0, max_line = 0; // source span of this function (via OPCODE_LINE).
 	for (int ip = 0; ip < _code_size;) {
 		Opcode op = Opcode(_code_ptr[ip]);
 		if (op == OPCODE_END) {
 			break;
+		}
+		if (op == OPCODE_LINE) {
+			int ln = _code_ptr[ip + 1];
+			if (min_line == 0 || ln < min_line) {
+				min_line = ln;
+			}
+			if (ln > max_line) {
+				max_line = ln;
+			}
 		}
 		int size = _instr_size(_code_ptr, ip);
 		if (size == 0) {
@@ -154,6 +169,11 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip = _code_size;
 			} break;
 			case OPCODE_LINE: {
+				// Interleave the matching GDScript source line as a comment.
+				String t = _src_line(p_source_lines, _code_ptr[ip + 1]).strip_edges();
+				if (!t.is_empty()) {
+					b += "\t// " + t + "\n";
+				}
 				ip += 2;
 			} break;
 			case OPCODE_ASSIGN: {
@@ -432,6 +452,24 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 
 	// --- Assemble the function. ---
 	String out;
+
+	// Block comment: the whole matching GDScript function (decl line .. last body line).
+	if (!p_source_lines.is_empty() && min_line > 0) {
+		int decl_line = min_line;
+		for (int l = min_line; l >= 1; l--) {
+			String t = _src_line(p_source_lines, l).strip_edges();
+			if (t.begins_with("func ") || t.begins_with("static func ")) {
+				decl_line = l;
+				break;
+			}
+		}
+		out += "// " + String("-").repeat(76) + "\n";
+		for (int l = decl_line; l <= max_line; l++) {
+			out += "// " + _src_line(p_source_lines, l) + "\n";
+		}
+		out += "// " + String("-").repeat(76) + "\n";
+	}
+
 	out += "Variant " + p_cpp_class + "::" + p_cpp_func + "(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {\n";
 	out += "\tVariant s[" + itos(_stack_size > 0 ? _stack_size : 1) + "];\n";
 	out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";

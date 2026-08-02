@@ -611,12 +611,18 @@ public:
 	_FORCE_INLINE_ int gds2cpp_default_arg_count() const { return _default_arg_count; }
 	_FORCE_INLINE_ int gds2cpp_default_arg(int p_idx) const { return _default_arg_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedConstructor gds2cpp_constructor(int p_idx) const { return _constructors_ptr[p_idx]; }
+	// gds2cpp: map stack slot -> source identifier (arg/local) for readable names.
+	// Only slots owned by a single identifier for the whole function are returned;
+	// slots reused by differently-named locals are omitted (left as temporaries).
+	// Requires the script to have been compiled with local-variable tracking on.
+	void gds2cpp_slot_names(HashMap<int, String> &r_names) const;
 
 	// gds2cpp: emit faithful C++ for this function's bytecode.
 	// Sets r_ok=false if an unsupported opcode is encountered (keep this function interpreted).
 	// p_source_lines: the .gd file split into lines (1-based via index-1) so the
 	// emitter can interleave the matching GDScript as comments. May be empty.
-	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, bool &r_ok) const;
+	// p_member_names: member index -> C++ name constant (e.g. 15 -> "M_values").
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, bool &r_ok) const;
 
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;

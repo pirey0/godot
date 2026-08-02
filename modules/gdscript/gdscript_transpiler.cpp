@@ -31,6 +31,7 @@
 #include "gdscript_function.h"
 
 #include "core/string/ustring.h"
+#include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
 
 // Fetch source line p_ln (1-based); empty if out of range.
@@ -38,19 +39,85 @@ static String _src_line(const Vector<String> &p_lines, int p_ln) {
 	return (p_ln >= 1 && p_ln <= p_lines.size()) ? p_lines[p_ln - 1] : String();
 }
 
+// --- Naming context (single-threaded dev tool: set per transpile_to_cpp call). ---
+// _addr() and _gname() consult these to emit readable names instead of raw indices.
+static const HashMap<int, String> *s_member_names = nullptr; // member idx -> "M_values"
+static const HashMap<int, String> *s_slot_names = nullptr; // stack idx -> local/arg name
+static const HashMap<int, String> *s_gname_ident = nullptr; // global-name idx -> "GN_has"
+static HashSet<int> *s_used_slots = nullptr; // stack idxs (>=3) referenced, for alias decls
+static HashSet<int> *s_used_gnames = nullptr; // global-name idxs referenced, for the enum
+
+// Turn an arbitrary string into a valid C++ identifier fragment.
+static String _ident(const String &p_s) {
+	String r;
+	for (int i = 0; i < p_s.length(); i++) {
+		char32_t c = p_s[i];
+		bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+		r += ok ? String::chr(c) : String("_");
+	}
+	if (r.is_empty()) {
+		r = "_";
+	}
+	if (r[0] >= '0' && r[0] <= '9') {
+		r = "_" + r;
+	}
+	return r;
+}
+
+// Reserved names the emitter itself uses as locals; a source var that collides gets a '_'.
+static bool _is_reserved_local(const String &p_n) {
+	static const char *kw[] = { "s", "inst", "gf", "cret", "ce", "ca", "valid", "a", "d", "dd",
+		"o", "val", "td", "ts", "vt", "rr", "rt", "rv", "bo", "tr", "ctr", "cont", "defarg", "i", "l",
+		// C++ keywords / literals a GDScript identifier might match:
+		"default", "new", "delete", "class", "struct", "this", "operator", "template", "typename",
+		"namespace", "public", "private", "protected", "virtual", "register", "const", "static",
+		"return", "if", "else", "for", "while", "do", "switch", "case", "break", "continue", "goto",
+		"true", "false", "nullptr", "int", "float", "double", "char", "bool", "void", "and", "or",
+		"not", "xor", "auto", "using", "friend", "union", "enum", "typedef", nullptr };
+	for (int i = 0; kw[i]; i++) {
+		if (p_n == kw[i]) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // Map a bytecode address to a C++ `Variant *` expression.
-// self=s[0], nil=s[2], args/locals=s[n]; constants via gf; members via inst.
+// self=s[0], nil=s[2]; args/locals get readable names (else t<n>); members named; constants shown.
 static String _addr(int p_addr) {
 	const int idx = p_addr & GDScriptFunction::ADDR_MASK;
 	switch (p_addr >> GDScriptFunction::ADDR_BITS) {
 		case GDScriptFunction::ADDR_TYPE_STACK:
+			if (idx >= GDScriptFunction::FIXED_ADDRESSES_MAX) {
+				if (s_used_slots) {
+					s_used_slots->insert(idx);
+				}
+				if (s_slot_names && s_slot_names->has(idx)) {
+					return "(&" + (*s_slot_names)[idx] + ")";
+				}
+				return "(&t" + itos(idx) + ")";
+			}
 			return "(&s[" + itos(idx) + "])";
 		case GDScriptFunction::ADDR_TYPE_CONSTANT:
 			return "gf->gds2cpp_constant_ptr(" + itos(idx) + ")";
 		case GDScriptFunction::ADDR_TYPE_MEMBER:
+			if (s_member_names && s_member_names->has(idx)) {
+				return "inst->gds2cpp_member_ptr(" + (*s_member_names)[idx] + ")";
+			}
 			return "inst->gds2cpp_member_ptr(" + itos(idx) + ")";
 	}
 	return "((Variant *)nullptr)";
+}
+
+// A named reference to a global name (method/property), recording the use for the enum.
+static String _gname(int p_idx) {
+	if (s_used_gnames) {
+		s_used_gnames->insert(p_idx);
+	}
+	if (s_gname_ident && s_gname_ident->has(p_idx)) {
+		return "gf->get_global_name(" + (*s_gname_ident)[p_idx] + ")";
+	}
+	return "gf->get_global_name(" + itos(p_idx) + ")";
 }
 
 // Instruction size for the opcodes we support (some are variable-length).
@@ -114,7 +181,34 @@ static int _instr_size(const int *p_code, int p_ip) {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, bool &r_ok) const {
+void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
+	// Walk the debug scope records: a slot with a single owning identifier across
+	// the whole function gets that name; a slot shared by differently-named locals
+	// is left unnamed (emitted as a temporary) to avoid a misleading alias.
+	HashMap<int, HashSet<String>> owners;
+	for (const StackDebug &sd : stack_debug) {
+		if (sd.added && sd.pos >= FIXED_ADDRESSES_MAX) {
+			owners[sd.pos].insert(String(sd.identifier));
+		}
+	}
+	HashSet<String> taken;
+	for (const KeyValue<int, HashSet<String>> &E : owners) {
+		if (E.value.size() != 1) {
+			continue; // reused slot -> keep as temporary
+		}
+		String name = _ident(*E.value.begin());
+		if (_is_reserved_local(name)) {
+			name += "_";
+		}
+		while (taken.has(name)) {
+			name += "_";
+		}
+		taken.insert(name);
+		r_names[E.key] = name;
+	}
+}
+
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, bool &r_ok) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -156,6 +250,29 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 		}
 		ip += size;
 	}
+
+	// --- Build naming context, then set it for _addr()/_gname() during pass 2. ---
+	HashMap<int, String> gname_ident; // global-name idx -> "GN_<name>"
+	{
+		HashSet<String> taken;
+		for (int i = 0; i < _global_names_count; i++) {
+			String nm = "GN_" + _ident(String(get_global_name(i)));
+			while (taken.has(nm)) {
+				nm += "_";
+			}
+			taken.insert(nm);
+			gname_ident[i] = nm;
+		}
+	}
+	HashMap<int, String> slot_names; // stack idx -> arg/local name
+	gds2cpp_slot_names(slot_names);
+
+	HashSet<int> used_slots, used_gnames;
+	s_member_names = &p_member_names;
+	s_slot_names = &slot_names;
+	s_gname_ident = &gname_ident;
+	s_used_slots = &used_slots;
+	s_used_gnames = &used_gnames;
 
 	// --- Pass 2: emit the C++ body. ---
 	String b; // body
@@ -228,7 +345,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					b += " };\n";
 				}
 				b += "\t\tVariant cret; Callable::CallError ce;\n";
-				b += "\t\t" + _addr(base_addr) + "->callp(gf->get_global_name(" + itos(methodname_idx) + "), " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", cret, ce);\n";
+				b += "\t\t" + _addr(base_addr) + "->callp(" + _gname(methodname_idx) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", cret, ce);\n";
 				if (ret) {
 					const int target_addr = _code_ptr[ip + 3 + argc];
 					b += "\t\t*" + _addr(target_addr) + " = cret;\n";
@@ -250,18 +367,18 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_TYPE_TEST_NATIVE: {
-				b += "\t{ Object *o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (o && ClassDB::is_parent_class(o->get_class_name(), gf->get_global_name(" + itos(_code_ptr[ip + 3]) + "))); }\n";
+				b += "\t{ Object *o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (o && ClassDB::is_parent_class(o->get_class_name(), " + _gname(_code_ptr[ip + 3]) + ")); }\n";
 				ip += 4;
 			} break;
 			case OPCODE_TYPE_TEST_ARRAY: {
 				b += "\t{ Variant *val = " + _addr(_code_ptr[ip + 2]) + "; bool result = false;\n";
-				b += "\t\tif (val->get_type() == Variant::ARRAY) { Array arr = *val; result = arr.get_typed_builtin() == (uint32_t)" + itos(_code_ptr[ip + 4]) + " && arr.get_typed_class_name() == gf->get_global_name(" + itos(_code_ptr[ip + 5]) + ") && arr.get_typed_script() == *" + _addr(_code_ptr[ip + 3]) + "; }\n";
+				b += "\t\tif (val->get_type() == Variant::ARRAY) { Array arr = *val; result = arr.get_typed_builtin() == (uint32_t)" + itos(_code_ptr[ip + 4]) + " && arr.get_typed_class_name() == " + _gname(_code_ptr[ip + 5]) + " && arr.get_typed_script() == *" + _addr(_code_ptr[ip + 3]) + "; }\n";
 				b += "\t\t*" + _addr(_code_ptr[ip + 1]) + " = result; }\n";
 				ip += 6;
 			} break;
 			case OPCODE_TYPE_TEST_DICTIONARY: {
 				b += "\t{ Variant *val = " + _addr(_code_ptr[ip + 2]) + "; bool result = false;\n";
-				b += "\t\tif (val->get_type() == Variant::DICTIONARY) { Dictionary d = *val; result = d.get_typed_key_builtin() == (uint32_t)" + itos(_code_ptr[ip + 5]) + " && d.get_typed_key_class_name() == gf->get_global_name(" + itos(_code_ptr[ip + 6]) + ") && d.get_typed_key_script() == *" + _addr(_code_ptr[ip + 3]) + " && d.get_typed_value_builtin() == (uint32_t)" + itos(_code_ptr[ip + 7]) + " && d.get_typed_value_class_name() == gf->get_global_name(" + itos(_code_ptr[ip + 8]) + ") && d.get_typed_value_script() == *" + _addr(_code_ptr[ip + 4]) + "; }\n";
+				b += "\t\tif (val->get_type() == Variant::DICTIONARY) { Dictionary d = *val; result = d.get_typed_key_builtin() == (uint32_t)" + itos(_code_ptr[ip + 5]) + " && d.get_typed_key_class_name() == " + _gname(_code_ptr[ip + 6]) + " && d.get_typed_key_script() == *" + _addr(_code_ptr[ip + 3]) + " && d.get_typed_value_builtin() == (uint32_t)" + itos(_code_ptr[ip + 7]) + " && d.get_typed_value_class_name() == " + _gname(_code_ptr[ip + 8]) + " && d.get_typed_value_script() == *" + _addr(_code_ptr[ip + 4]) + "; }\n";
 				b += "\t\t*" + _addr(_code_ptr[ip + 1]) + " = result; }\n";
 				ip += 9;
 			} break;
@@ -278,7 +395,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_SET_MEMBER: {
-				b += "\t{ bool valid; ClassDB::set_property(inst->get_owner(), gf->get_global_name(" + itos(_code_ptr[ip + 2]) + "), *" + _addr(_code_ptr[ip + 1]) + ", &valid); }\n";
+				b += "\t{ bool valid; ClassDB::set_property(inst->get_owner(), " + _gname(_code_ptr[ip + 2]) + ", *" + _addr(_code_ptr[ip + 1]) + ", &valid); }\n";
 				ip += 3;
 			} break;
 			case OPCODE_ASSIGN_TYPED_BUILTIN: {
@@ -324,7 +441,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			} break;
 			case OPCODE_GET_NAMED: {
 				// VM: src = code[ip+1], dst = code[ip+2]  ->  dst = src[name]
-				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 2]) + " = " + _addr(_code_ptr[ip + 1]) + "->get_named(gf->get_global_name(" + itos(_code_ptr[ip + 3]) + "), valid); }\n";
+				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 2]) + " = " + _addr(_code_ptr[ip + 1]) + "->get_named(" + _gname(_code_ptr[ip + 3]) + ", valid); }\n";
 				ip += 4;
 			} break;
 			case OPCODE_RETURN_TYPED_BUILTIN: {
@@ -360,7 +477,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					}
 					b += " };\n";
 				}
-				b += "\t\tCallable::CallError ce; Variant::call_utility_function(gf->get_global_name(" + itos(fn_idx) + "), " + _addr(_code_ptr[ip + 2 + argc]) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", ce);\n";
+				b += "\t\tCallable::CallError ce; Variant::call_utility_function(" + _gname(fn_idx) + ", " + _addr(_code_ptr[ip + 2 + argc]) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", ce);\n";
 				b += "\t}\n";
 				ip += iac + 4;
 			} break;
@@ -449,6 +566,12 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			}
 		}
 	}
+	// Naming context is only consulted during pass 2; drop it now.
+	s_member_names = nullptr;
+	s_slot_names = nullptr;
+	s_gname_ident = nullptr;
+	s_used_slots = nullptr;
+	s_used_gnames = nullptr;
 
 	// --- Assemble the function. ---
 	String out;
@@ -474,6 +597,40 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	out += "\tVariant s[" + itos(_stack_size > 0 ? _stack_size : 1) + "];\n";
 	out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
 	out += "\tfor (int i = 0; i < " + itos(_argument_count) + " && i < p_argc; i++) { s[3 + i] = *p_args[i]; }\n";
+
+	// Named constants for the global names this function references.
+	if (!used_gnames.is_empty()) {
+		Vector<int> gi;
+		for (const int &x : used_gnames) {
+			gi.push_back(x);
+		}
+		gi.sort();
+		out += "\tenum { ";
+		for (int k = 0; k < gi.size(); k++) {
+			out += (k ? ", " : "") + gname_ident[gi[k]] + " = " + itos(gi[k]);
+		}
+		out += " }; // \"";
+		for (int k = 0; k < gi.size(); k++) {
+			out += (k ? "\", \"" : "") + String(get_global_name(gi[k]));
+		}
+		out += "\"\n";
+	}
+	// Readable aliases for the stack slots this function uses.
+	if (!used_slots.is_empty()) {
+		Vector<int> si;
+		for (const int &x : used_slots) {
+			si.push_back(x);
+		}
+		si.sort();
+		for (int k = 0; k < si.size(); k++) {
+			int idx = si[k];
+			bool named = slot_names.has(idx);
+			String nm = named ? slot_names[idx] : ("t" + itos(idx));
+			String tag = (idx < FIXED_ADDRESSES_MAX + _argument_count) ? "arg" : (named ? "local" : "temp");
+			out += "\tVariant &" + nm + " = s[" + itos(idx) + "]; // " + tag + "\n";
+		}
+	}
+
 	out += b;
 	out += "\treturn Variant();\n";
 	out += "}\n";

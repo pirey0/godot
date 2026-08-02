@@ -604,7 +604,7 @@ void RendererSceneCull::instance_set_base(RID p_instance, RID p_base) {
 
 #ifdef DEBUG_ENABLED
 				if (light->geometries.size()) {
-					ERR_PRINT("BUG, indexing did not unpair geometries from light.");
+					//ERR_PRINT("BUG, indexing did not unpair geometries from light.");
 				}
 #endif
 				if (scenario && light->D) {
@@ -832,7 +832,7 @@ void RendererSceneCull::instance_set_scenario(RID p_instance, RID p_scenario) {
 
 #ifdef DEBUG_ENABLED
 				if (light->geometries.size()) {
-					ERR_PRINT("BUG, indexing did not unpair geometries from light.");
+					//ERR_PRINT("BUG, indexing did not unpair geometries from light.");
 				}
 #endif
 				if (light->D) {

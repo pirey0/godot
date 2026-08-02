@@ -601,6 +601,16 @@ public:
 
 	// gds2cpp: stable pointer to a constant, for transpiled function bodies.
 	_FORCE_INLINE_ const Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
+	// gds2cpp: runtime dispatch tables, for transpiled function bodies.
+	_FORCE_INLINE_ Variant::ValidatedOperatorEvaluator gds2cpp_operator_func(int p_idx) const { return _operator_funcs_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedKeyedGetter gds2cpp_keyed_getter(int p_idx) const { return _keyed_getters_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedKeyedSetter gds2cpp_keyed_setter(int p_idx) const { return _keyed_setters_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedGetter gds2cpp_getter(int p_idx) const { return _getters_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedBuiltInMethod gds2cpp_builtin_method(int p_idx) const { return _builtin_methods_ptr[p_idx]; }
+	_FORCE_INLINE_ MethodBind *gds2cpp_method(int p_idx) const { return _methods_ptr[p_idx]; }
+	_FORCE_INLINE_ int gds2cpp_default_arg_count() const { return _default_arg_count; }
+	_FORCE_INLINE_ int gds2cpp_default_arg(int p_idx) const { return _default_arg_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedConstructor gds2cpp_constructor(int p_idx) const { return _constructors_ptr[p_idx]; }
 
 	// gds2cpp: emit faithful C++ for this function's bytecode.
 	// Sets r_ok=false if an unsupported opcode is encountered (keep this function interpreted).

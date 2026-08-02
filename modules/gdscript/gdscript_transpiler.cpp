@@ -303,7 +303,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += iac + 4;
 			} break;
 			case OPCODE_GET_NAMED: {
-				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 1]) + " = " + _addr(_code_ptr[ip + 2]) + "->get_named(gf->get_global_name(" + itos(_code_ptr[ip + 3]) + "), valid); }\n";
+				// VM: src = code[ip+1], dst = code[ip+2]  ->  dst = src[name]
+				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 2]) + " = " + _addr(_code_ptr[ip + 1]) + "->get_named(gf->get_global_name(" + itos(_code_ptr[ip + 3]) + "), valid); }\n";
 				ip += 4;
 			} break;
 			case OPCODE_RETURN_TYPED_BUILTIN: {

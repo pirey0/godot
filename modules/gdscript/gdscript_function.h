@@ -599,6 +599,13 @@ public:
 	Variant get_constant(int p_idx) const;
 	StringName get_global_name(int p_idx) const;
 
+	// gds2cpp: stable pointer to a constant, for transpiled function bodies.
+	_FORCE_INLINE_ const Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
+
+	// gds2cpp: emit faithful C++ for this function's bytecode.
+	// Sets r_ok=false if an unsupported opcode is encountered (keep this function interpreted).
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, bool &r_ok) const;
+
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;
 

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  gds2cpp_tool.h                                                        */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,20 +28,23 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "register_types.h"
+#pragma once
 
-#include "core/object/class_db.h"
+#include "core/object/ref_counted.h"
 
-#include "data_gen.h"
-#include "gds2cpp_tool.h"
+// gds2cpp: dev tool to drive the GDScript->C++ transpiler over a script and
+// report per-function transpilability. Not part of a shipped game.
+class Gds2cppTool : public RefCounted {
+	GDCLASS(Gds2cppTool, RefCounted);
 
-void initialize_gds2cpp_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	ClassDB::register_class<Gds2cppData>();
-	ClassDB::register_class<Gds2cppTool>();
-}
+protected:
+	static void _bind_methods();
 
-void uninitialize_gds2cpp_module(ModuleInitializationLevel p_level) {
-}
+public:
+	// Loads the GDScript at p_path, transpiles each function, and returns a
+	// human-readable report (transpiled vs interpreted, first blocking opcode).
+	String analyze_script(const String &p_path);
+
+	// Returns the generated C++ for the whole script (one translation unit).
+	String transpile_script(const String &p_path, const String &p_cpp_class);
+};

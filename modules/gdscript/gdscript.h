@@ -373,6 +373,9 @@ class GDScriptInstance : public ScriptInstance {
 public:
 	virtual Object *get_owner() { return owner; }
 
+	// gds2cpp: direct by-index access for transpiled (AOT) function bodies.
+	_FORCE_INLINE_ Variant *gds2cpp_member_ptr(int p_idx) { return &members.write[p_idx]; }
+
 	virtual bool set(const StringName &p_name, const Variant &p_value);
 	virtual bool get(const StringName &p_name, Variant &r_ret) const;
 	virtual void get_property_list(List<PropertyInfo> *p_properties) const;

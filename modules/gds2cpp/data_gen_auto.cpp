@@ -36,80 +36,107 @@
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
+enum { // g_gf slots
+	GF__init = 0,
+	GF_is_mission_starting = 1,
+	GF_clear_all_data = 2,
+	GF_load_yaml_data = 3,
+	GF_reset_to_default_properties = 4,
+	GF_reset_to_default_properties_partial = 5,
+	GF_has = 6,
+	GF_of = 7,
+	GF_ofOr = 8,
+	GF_apply = 9,
+	GF_clear = 10,
+	GF_event = 11,
+	GF_listen = 12,
+	GF_is_listening = 13,
+	GF_onListenerLeftTree = 14,
+	GF_unlistenAll = 15,
+	GF_unlisten = 16,
+	GF_removeListener = 17,
+	GF_clearListeners = 18,
+	GF_changeBy = 19,
+	GF_startCaptialized = 20,
+	GF_serialize = 21,
+	GF_deserialize = 22,
+	GF_should_property_be_saved = 23,
+};
+#define GF(m) g_gf[GF_##m]
 GDScriptFunction *Data_gen::g_gf[24] = {};
 void Data_gen::bind(GDScript *p_script) {
 	const HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();
 	if (fns.has(StringName("_init"))) {
-		g_gf[0] = fns[StringName("_init")];
+		GF(_init) = fns[StringName("_init")];
 	}
 	if (fns.has(StringName("is_mission_starting"))) {
-		g_gf[1] = fns[StringName("is_mission_starting")];
+		GF(is_mission_starting) = fns[StringName("is_mission_starting")];
 	}
 	if (fns.has(StringName("clear_all_data"))) {
-		g_gf[2] = fns[StringName("clear_all_data")];
+		GF(clear_all_data) = fns[StringName("clear_all_data")];
 	}
 	if (fns.has(StringName("load_yaml_data"))) {
-		g_gf[3] = fns[StringName("load_yaml_data")];
+		GF(load_yaml_data) = fns[StringName("load_yaml_data")];
 	}
 	if (fns.has(StringName("reset_to_default_properties"))) {
-		g_gf[4] = fns[StringName("reset_to_default_properties")];
+		GF(reset_to_default_properties) = fns[StringName("reset_to_default_properties")];
 	}
 	if (fns.has(StringName("reset_to_default_properties_partial"))) {
-		g_gf[5] = fns[StringName("reset_to_default_properties_partial")];
+		GF(reset_to_default_properties_partial) = fns[StringName("reset_to_default_properties_partial")];
 	}
 	if (fns.has(StringName("has"))) {
-		g_gf[6] = fns[StringName("has")];
+		GF(has) = fns[StringName("has")];
 	}
 	if (fns.has(StringName("of"))) {
-		g_gf[7] = fns[StringName("of")];
+		GF(of) = fns[StringName("of")];
 	}
 	if (fns.has(StringName("ofOr"))) {
-		g_gf[8] = fns[StringName("ofOr")];
+		GF(ofOr) = fns[StringName("ofOr")];
 	}
 	if (fns.has(StringName("apply"))) {
-		g_gf[9] = fns[StringName("apply")];
+		GF(apply) = fns[StringName("apply")];
 	}
 	if (fns.has(StringName("clear"))) {
-		g_gf[10] = fns[StringName("clear")];
+		GF(clear) = fns[StringName("clear")];
 	}
 	if (fns.has(StringName("event"))) {
-		g_gf[11] = fns[StringName("event")];
+		GF(event) = fns[StringName("event")];
 	}
 	if (fns.has(StringName("listen"))) {
-		g_gf[12] = fns[StringName("listen")];
+		GF(listen) = fns[StringName("listen")];
 	}
 	if (fns.has(StringName("is_listening"))) {
-		g_gf[13] = fns[StringName("is_listening")];
+		GF(is_listening) = fns[StringName("is_listening")];
 	}
 	if (fns.has(StringName("onListenerLeftTree"))) {
-		g_gf[14] = fns[StringName("onListenerLeftTree")];
+		GF(onListenerLeftTree) = fns[StringName("onListenerLeftTree")];
 	}
 	if (fns.has(StringName("unlistenAll"))) {
-		g_gf[15] = fns[StringName("unlistenAll")];
+		GF(unlistenAll) = fns[StringName("unlistenAll")];
 	}
 	if (fns.has(StringName("unlisten"))) {
-		g_gf[16] = fns[StringName("unlisten")];
+		GF(unlisten) = fns[StringName("unlisten")];
 	}
 	if (fns.has(StringName("removeListener"))) {
-		g_gf[17] = fns[StringName("removeListener")];
+		GF(removeListener) = fns[StringName("removeListener")];
 	}
 	if (fns.has(StringName("clearListeners"))) {
-		g_gf[18] = fns[StringName("clearListeners")];
+		GF(clearListeners) = fns[StringName("clearListeners")];
 	}
 	if (fns.has(StringName("changeBy"))) {
-		g_gf[19] = fns[StringName("changeBy")];
+		GF(changeBy) = fns[StringName("changeBy")];
 	}
 	if (fns.has(StringName("startCaptialized"))) {
-		g_gf[20] = fns[StringName("startCaptialized")];
+		GF(startCaptialized) = fns[StringName("startCaptialized")];
 	}
 	if (fns.has(StringName("serialize"))) {
-		g_gf[21] = fns[StringName("serialize")];
+		GF(serialize) = fns[StringName("serialize")];
 	}
 	if (fns.has(StringName("deserialize"))) {
-		g_gf[22] = fns[StringName("deserialize")];
+		GF(deserialize) = fns[StringName("deserialize")];
 	}
 	if (fns.has(StringName("should_property_be_saved"))) {
-		g_gf[23] = fns[StringName("should_property_be_saved")];
+		GF(should_property_be_saved) = fns[StringName("should_property_be_saved")];
 	}
 }
 
@@ -953,7 +980,7 @@ L286:;
 	// unlistenAll(i)
 	{
 		const Variant *ca[] = { (&t6) };
-		Data_gen::fn_unlistenAll(inst, Data_gen::g_gf[15], ca, 1); // devirt unlistenAll
+		Data_gen::fn_unlistenAll(inst, GF(unlistenAll), ca, 1); // devirt unlistenAll
 	}
 	*(&t17) = Variant();
 	goto L281;
@@ -1182,7 +1209,7 @@ L148:;
 	// unlistenAll(i)
 	{
 		const Variant *ca[] = { (&t7) };
-		Data_gen::fn_unlistenAll(inst, Data_gen::g_gf[15], ca, 1); // devirt unlistenAll
+		Data_gen::fn_unlistenAll(inst, GF(unlistenAll), ca, 1); // devirt unlistenAll
 	}
 	*(&t11) = Variant();
 	goto L143;
@@ -1399,7 +1426,7 @@ L151:;
 	// listener.gameDataChanged(property, null, of(property))
 	{
 		const Variant *ca[] = { (&property) };
-		*(&t11) = Data_gen::fn_of(inst, Data_gen::g_gf[7], ca, 1); // devirt of
+		*(&t11) = Data_gen::fn_of(inst, GF(of), ca, 1); // devirt of
 	}
 	{
 		const Variant *ca[] = { (&property), gf->gds2cpp_constant_ptr(6), (&t11) };
@@ -1666,7 +1693,7 @@ L17:;
 	}
 	{
 		const Variant *ca[] = { (&t7), (&listener) };
-		Data_gen::fn_removeListener(inst, Data_gen::g_gf[17], ca, 2); // devirt removeListener
+		Data_gen::fn_removeListener(inst, GF(removeListener), ca, 2); // devirt removeListener
 	}
 	*(&t8) = Variant();
 	*(&t7) = Variant();
@@ -1849,7 +1876,7 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	// return apply(property, change + ofOr(property,0))
 	{
 		const Variant *ca[] = { (&property), gf->gds2cpp_constant_ptr(0) };
-		*(&t7) = Data_gen::fn_ofOr(inst, Data_gen::g_gf[8], ca, 2); // devirt ofOr
+		*(&t7) = Data_gen::fn_ofOr(inst, GF(ofOr), ca, 2); // devirt ofOr
 	}
 	{
 		bool valid;
@@ -1857,7 +1884,7 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	}
 	{
 		const Variant *ca[] = { (&property), (&t6) };
-		*(&t5) = Data_gen::fn_apply(inst, Data_gen::g_gf[9], ca, 2); // devirt apply
+		*(&t5) = Data_gen::fn_apply(inst, GF(apply), ca, 2); // devirt apply
 	}
 	return *(&t5);
 	*(&t7) = Variant();
@@ -1978,7 +2005,7 @@ L28:;
 	// if should_property_be_saved(x):
 	{
 		const Variant *ca[] = { (&x) };
-		*(&t7) = Data_gen::fn_should_property_be_saved(inst, Data_gen::g_gf[23], ca, 1); // devirt should_property_be_saved
+		*(&t7) = Data_gen::fn_should_property_be_saved(inst, GF(should_property_be_saved), ca, 1); // devirt should_property_be_saved
 	}
 	if (!bool(*(&t7))) {
 		goto L56;
@@ -2256,3 +2283,4 @@ Data_gen::Fn Data_gen::lookup(const StringName &p_name) {
 	}
 	return nullptr;
 }
+#undef GF

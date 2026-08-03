@@ -36,191 +36,255 @@
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
+enum { // g_gf slots
+	GF_t_op_add = 0,
+	GF_t_op_arith = 1,
+	GF_t_op_cmp = 2,
+	GF_t_op_eq = 3,
+	GF_t_op_bit = 4,
+	GF_t_op_not = 5,
+	GF_t_op_neg = 6,
+	GF_t_op_mod = 7,
+	GF_t_op_in = 8,
+	GF_t_op_str_concat = 9,
+	GF_t_construct_vec2 = 10,
+	GF_t_construct_vec3 = 11,
+	GF_t_construct_color = 12,
+	GF_t_construct_array = 13,
+	GF_t_construct_dict = 14,
+	GF_t_typed_array = 15,
+	GF_t_typed_dict = 16,
+	GF_t_get_indexed = 17,
+	GF_t_set_indexed = 18,
+	GF_t_get_keyed = 19,
+	GF_t_set_keyed = 20,
+	GF_t_get_named = 21,
+	GF_t_set_named = 22,
+	GF_t_get_member = 23,
+	GF_t_set_member = 24,
+	GF_t_member_arr = 25,
+	GF_t_member_dict_str = 26,
+	GF_t_cast_int = 27,
+	GF_t_cast_float = 28,
+	GF_t_cast_string = 29,
+	GF_t_is_builtin = 30,
+	GF_t_is_array = 31,
+	GF_t_is_string = 32,
+	GF_t_if = 33,
+	GF_t_while = 34,
+	GF_t_ternary = 35,
+	GF_t_for_range = 36,
+	GF_t_for_range3 = 37,
+	GF_t_for_array = 38,
+	GF_t_for_int_array = 39,
+	GF_t_for_float = 40,
+	GF_t_for_string = 41,
+	GF_t_for_dict = 42,
+	GF_t_for_packed_int = 43,
+	GF_t_for_packed_str = 44,
+	GF_t_for_vec2 = 45,
+	GF_t_call_utility = 46,
+	GF_t_call_len = 47,
+	GF_t_call_self = 48,
+	GF_t_call_builtin_static = 49,
+	GF_t_call_method = 50,
+	GF_t_ret_int = 51,
+	GF_t_ret_array = 52,
+	GF_t_ret_dict = 53,
+	GF_t_assert = 54,
+	GF_t_string_ops = 55,
+	GF_t_static_get = 56,
+	GF_t_static_set = 57,
+	GF_t_typed_dict2 = 58,
+	GF_t_method_bind_validated = 59,
+	GF_t_native_static = 60,
+};
+#define GF(m) g_gf[GF_##m]
 GDScriptFunction *OpTest_gen::g_gf[61] = {};
 void OpTest_gen::bind(GDScript *p_script) {
 	const HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();
 	if (fns.has(StringName("t_op_add"))) {
-		g_gf[0] = fns[StringName("t_op_add")];
+		GF(t_op_add) = fns[StringName("t_op_add")];
 	}
 	if (fns.has(StringName("t_op_arith"))) {
-		g_gf[1] = fns[StringName("t_op_arith")];
+		GF(t_op_arith) = fns[StringName("t_op_arith")];
 	}
 	if (fns.has(StringName("t_op_cmp"))) {
-		g_gf[2] = fns[StringName("t_op_cmp")];
+		GF(t_op_cmp) = fns[StringName("t_op_cmp")];
 	}
 	if (fns.has(StringName("t_op_eq"))) {
-		g_gf[3] = fns[StringName("t_op_eq")];
+		GF(t_op_eq) = fns[StringName("t_op_eq")];
 	}
 	if (fns.has(StringName("t_op_bit"))) {
-		g_gf[4] = fns[StringName("t_op_bit")];
+		GF(t_op_bit) = fns[StringName("t_op_bit")];
 	}
 	if (fns.has(StringName("t_op_not"))) {
-		g_gf[5] = fns[StringName("t_op_not")];
+		GF(t_op_not) = fns[StringName("t_op_not")];
 	}
 	if (fns.has(StringName("t_op_neg"))) {
-		g_gf[6] = fns[StringName("t_op_neg")];
+		GF(t_op_neg) = fns[StringName("t_op_neg")];
 	}
 	if (fns.has(StringName("t_op_mod"))) {
-		g_gf[7] = fns[StringName("t_op_mod")];
+		GF(t_op_mod) = fns[StringName("t_op_mod")];
 	}
 	if (fns.has(StringName("t_op_in"))) {
-		g_gf[8] = fns[StringName("t_op_in")];
+		GF(t_op_in) = fns[StringName("t_op_in")];
 	}
 	if (fns.has(StringName("t_op_str_concat"))) {
-		g_gf[9] = fns[StringName("t_op_str_concat")];
+		GF(t_op_str_concat) = fns[StringName("t_op_str_concat")];
 	}
 	if (fns.has(StringName("t_construct_vec2"))) {
-		g_gf[10] = fns[StringName("t_construct_vec2")];
+		GF(t_construct_vec2) = fns[StringName("t_construct_vec2")];
 	}
 	if (fns.has(StringName("t_construct_vec3"))) {
-		g_gf[11] = fns[StringName("t_construct_vec3")];
+		GF(t_construct_vec3) = fns[StringName("t_construct_vec3")];
 	}
 	if (fns.has(StringName("t_construct_color"))) {
-		g_gf[12] = fns[StringName("t_construct_color")];
+		GF(t_construct_color) = fns[StringName("t_construct_color")];
 	}
 	if (fns.has(StringName("t_construct_array"))) {
-		g_gf[13] = fns[StringName("t_construct_array")];
+		GF(t_construct_array) = fns[StringName("t_construct_array")];
 	}
 	if (fns.has(StringName("t_construct_dict"))) {
-		g_gf[14] = fns[StringName("t_construct_dict")];
+		GF(t_construct_dict) = fns[StringName("t_construct_dict")];
 	}
 	if (fns.has(StringName("t_typed_array"))) {
-		g_gf[15] = fns[StringName("t_typed_array")];
+		GF(t_typed_array) = fns[StringName("t_typed_array")];
 	}
 	if (fns.has(StringName("t_typed_dict"))) {
-		g_gf[16] = fns[StringName("t_typed_dict")];
+		GF(t_typed_dict) = fns[StringName("t_typed_dict")];
 	}
 	if (fns.has(StringName("t_get_indexed"))) {
-		g_gf[17] = fns[StringName("t_get_indexed")];
+		GF(t_get_indexed) = fns[StringName("t_get_indexed")];
 	}
 	if (fns.has(StringName("t_set_indexed"))) {
-		g_gf[18] = fns[StringName("t_set_indexed")];
+		GF(t_set_indexed) = fns[StringName("t_set_indexed")];
 	}
 	if (fns.has(StringName("t_get_keyed"))) {
-		g_gf[19] = fns[StringName("t_get_keyed")];
+		GF(t_get_keyed) = fns[StringName("t_get_keyed")];
 	}
 	if (fns.has(StringName("t_set_keyed"))) {
-		g_gf[20] = fns[StringName("t_set_keyed")];
+		GF(t_set_keyed) = fns[StringName("t_set_keyed")];
 	}
 	if (fns.has(StringName("t_get_named"))) {
-		g_gf[21] = fns[StringName("t_get_named")];
+		GF(t_get_named) = fns[StringName("t_get_named")];
 	}
 	if (fns.has(StringName("t_set_named"))) {
-		g_gf[22] = fns[StringName("t_set_named")];
+		GF(t_set_named) = fns[StringName("t_set_named")];
 	}
 	if (fns.has(StringName("t_get_member"))) {
-		g_gf[23] = fns[StringName("t_get_member")];
+		GF(t_get_member) = fns[StringName("t_get_member")];
 	}
 	if (fns.has(StringName("t_set_member"))) {
-		g_gf[24] = fns[StringName("t_set_member")];
+		GF(t_set_member) = fns[StringName("t_set_member")];
 	}
 	if (fns.has(StringName("t_member_arr"))) {
-		g_gf[25] = fns[StringName("t_member_arr")];
+		GF(t_member_arr) = fns[StringName("t_member_arr")];
 	}
 	if (fns.has(StringName("t_member_dict_str"))) {
-		g_gf[26] = fns[StringName("t_member_dict_str")];
+		GF(t_member_dict_str) = fns[StringName("t_member_dict_str")];
 	}
 	if (fns.has(StringName("t_cast_int"))) {
-		g_gf[27] = fns[StringName("t_cast_int")];
+		GF(t_cast_int) = fns[StringName("t_cast_int")];
 	}
 	if (fns.has(StringName("t_cast_float"))) {
-		g_gf[28] = fns[StringName("t_cast_float")];
+		GF(t_cast_float) = fns[StringName("t_cast_float")];
 	}
 	if (fns.has(StringName("t_cast_string"))) {
-		g_gf[29] = fns[StringName("t_cast_string")];
+		GF(t_cast_string) = fns[StringName("t_cast_string")];
 	}
 	if (fns.has(StringName("t_is_builtin"))) {
-		g_gf[30] = fns[StringName("t_is_builtin")];
+		GF(t_is_builtin) = fns[StringName("t_is_builtin")];
 	}
 	if (fns.has(StringName("t_is_array"))) {
-		g_gf[31] = fns[StringName("t_is_array")];
+		GF(t_is_array) = fns[StringName("t_is_array")];
 	}
 	if (fns.has(StringName("t_is_string"))) {
-		g_gf[32] = fns[StringName("t_is_string")];
+		GF(t_is_string) = fns[StringName("t_is_string")];
 	}
 	if (fns.has(StringName("t_if"))) {
-		g_gf[33] = fns[StringName("t_if")];
+		GF(t_if) = fns[StringName("t_if")];
 	}
 	if (fns.has(StringName("t_while"))) {
-		g_gf[34] = fns[StringName("t_while")];
+		GF(t_while) = fns[StringName("t_while")];
 	}
 	if (fns.has(StringName("t_ternary"))) {
-		g_gf[35] = fns[StringName("t_ternary")];
+		GF(t_ternary) = fns[StringName("t_ternary")];
 	}
 	if (fns.has(StringName("t_for_range"))) {
-		g_gf[36] = fns[StringName("t_for_range")];
+		GF(t_for_range) = fns[StringName("t_for_range")];
 	}
 	if (fns.has(StringName("t_for_range3"))) {
-		g_gf[37] = fns[StringName("t_for_range3")];
+		GF(t_for_range3) = fns[StringName("t_for_range3")];
 	}
 	if (fns.has(StringName("t_for_array"))) {
-		g_gf[38] = fns[StringName("t_for_array")];
+		GF(t_for_array) = fns[StringName("t_for_array")];
 	}
 	if (fns.has(StringName("t_for_int_array"))) {
-		g_gf[39] = fns[StringName("t_for_int_array")];
+		GF(t_for_int_array) = fns[StringName("t_for_int_array")];
 	}
 	if (fns.has(StringName("t_for_float"))) {
-		g_gf[40] = fns[StringName("t_for_float")];
+		GF(t_for_float) = fns[StringName("t_for_float")];
 	}
 	if (fns.has(StringName("t_for_string"))) {
-		g_gf[41] = fns[StringName("t_for_string")];
+		GF(t_for_string) = fns[StringName("t_for_string")];
 	}
 	if (fns.has(StringName("t_for_dict"))) {
-		g_gf[42] = fns[StringName("t_for_dict")];
+		GF(t_for_dict) = fns[StringName("t_for_dict")];
 	}
 	if (fns.has(StringName("t_for_packed_int"))) {
-		g_gf[43] = fns[StringName("t_for_packed_int")];
+		GF(t_for_packed_int) = fns[StringName("t_for_packed_int")];
 	}
 	if (fns.has(StringName("t_for_packed_str"))) {
-		g_gf[44] = fns[StringName("t_for_packed_str")];
+		GF(t_for_packed_str) = fns[StringName("t_for_packed_str")];
 	}
 	if (fns.has(StringName("t_for_vec2"))) {
-		g_gf[45] = fns[StringName("t_for_vec2")];
+		GF(t_for_vec2) = fns[StringName("t_for_vec2")];
 	}
 	if (fns.has(StringName("t_call_utility"))) {
-		g_gf[46] = fns[StringName("t_call_utility")];
+		GF(t_call_utility) = fns[StringName("t_call_utility")];
 	}
 	if (fns.has(StringName("t_call_len"))) {
-		g_gf[47] = fns[StringName("t_call_len")];
+		GF(t_call_len) = fns[StringName("t_call_len")];
 	}
 	if (fns.has(StringName("t_call_self"))) {
-		g_gf[48] = fns[StringName("t_call_self")];
+		GF(t_call_self) = fns[StringName("t_call_self")];
 	}
 	if (fns.has(StringName("t_call_builtin_static"))) {
-		g_gf[49] = fns[StringName("t_call_builtin_static")];
+		GF(t_call_builtin_static) = fns[StringName("t_call_builtin_static")];
 	}
 	if (fns.has(StringName("t_call_method"))) {
-		g_gf[50] = fns[StringName("t_call_method")];
+		GF(t_call_method) = fns[StringName("t_call_method")];
 	}
 	if (fns.has(StringName("t_ret_int"))) {
-		g_gf[51] = fns[StringName("t_ret_int")];
+		GF(t_ret_int) = fns[StringName("t_ret_int")];
 	}
 	if (fns.has(StringName("t_ret_array"))) {
-		g_gf[52] = fns[StringName("t_ret_array")];
+		GF(t_ret_array) = fns[StringName("t_ret_array")];
 	}
 	if (fns.has(StringName("t_ret_dict"))) {
-		g_gf[53] = fns[StringName("t_ret_dict")];
+		GF(t_ret_dict) = fns[StringName("t_ret_dict")];
 	}
 	if (fns.has(StringName("t_assert"))) {
-		g_gf[54] = fns[StringName("t_assert")];
+		GF(t_assert) = fns[StringName("t_assert")];
 	}
 	if (fns.has(StringName("t_string_ops"))) {
-		g_gf[55] = fns[StringName("t_string_ops")];
+		GF(t_string_ops) = fns[StringName("t_string_ops")];
 	}
 	if (fns.has(StringName("t_static_get"))) {
-		g_gf[56] = fns[StringName("t_static_get")];
+		GF(t_static_get) = fns[StringName("t_static_get")];
 	}
 	if (fns.has(StringName("t_static_set"))) {
-		g_gf[57] = fns[StringName("t_static_set")];
+		GF(t_static_set) = fns[StringName("t_static_set")];
 	}
 	if (fns.has(StringName("t_typed_dict2"))) {
-		g_gf[58] = fns[StringName("t_typed_dict2")];
+		GF(t_typed_dict2) = fns[StringName("t_typed_dict2")];
 	}
 	if (fns.has(StringName("t_method_bind_validated"))) {
-		g_gf[59] = fns[StringName("t_method_bind_validated")];
+		GF(t_method_bind_validated) = fns[StringName("t_method_bind_validated")];
 	}
 	if (fns.has(StringName("t_native_static"))) {
-		g_gf[60] = fns[StringName("t_native_static")];
+		GF(t_native_static) = fns[StringName("t_native_static")];
 	}
 }
 
@@ -1964,7 +2028,7 @@ Variant OpTest_gen::fn_t_call_self(GDScriptInstance *inst, GDScriptFunction *gf,
 	// func t_call_self(a: int) -> int: return t_op_add(a, 1)
 	{
 		const Variant *ca[] = { (&a_), gf->gds2cpp_constant_ptr(0) };
-		*(&t4) = OpTest_gen::fn_t_op_add(inst, OpTest_gen::g_gf[0], ca, 2); // devirt t_op_add
+		*(&t4) = OpTest_gen::fn_t_op_add(inst, GF(t_op_add), ca, 2); // devirt t_op_add
 	}
 	return *(&t4);
 	return Variant();
@@ -2493,3 +2557,4 @@ OpTest_gen::Fn OpTest_gen::lookup(const StringName &p_name) {
 	}
 	return nullptr;
 }
+#undef GF

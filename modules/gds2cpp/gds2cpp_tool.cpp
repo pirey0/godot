@@ -240,11 +240,21 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	c += "#include \"core/variant/variant_internal.h\"\n";
 	c += "#include \"modules/gdscript/gdscript.h\"\n";
 	c += "#include \"modules/gdscript/gdscript_function.h\"\n\n";
+	// Named slot indices into g_gf, referenced via the GF(<method>) macro so devirt
+	// calls read GF(ofOr) instead of g_gf[8].
+	if (ok.size() > 0) {
+		c += "enum { // g_gf slots\n";
+		for (int i = 0; i < ok.size(); i++) {
+			c += "\tGF_" + ok[i].cpp.substr(3) + " = " + itos(i) + ",\n";
+		}
+		c += "};\n";
+	}
+	c += "#define GF(m) g_gf[GF_##m]\n";
 	c += "GDScriptFunction *" + cls + "::g_gf[" + itos(N) + "] = {};\n";
 	c += "void " + cls + "::bind(GDScript *p_script) {\n";
 	c += "\tconst HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();\n";
 	for (int i = 0; i < ok.size(); i++) {
-		c += "\tif (fns.has(StringName(\"" + ok[i].orig + "\"))) g_gf[" + itos(i) + "] = fns[StringName(\"" + ok[i].orig + "\")];\n";
+		c += "\tif (fns.has(StringName(\"" + ok[i].orig + "\"))) GF(" + ok[i].cpp.substr(3) + ") = fns[StringName(\"" + ok[i].orig + "\")];\n";
 	}
 	c += "}\n\n";
 	c += member_block;
@@ -254,6 +264,7 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 		c += "\tif (p_name == StringName(\"" + n.orig + "\")) return &" + cls + "::" + n.cpp + ";\n";
 	}
 	c += "\treturn nullptr;\n}\n";
+	c += "#undef GF\n";
 
 	Ref<FileAccess> fh = FileAccess::open(p_out_dir.path_join(p_file_base + ".h"), FileAccess::WRITE);
 	if (fh.is_null()) {

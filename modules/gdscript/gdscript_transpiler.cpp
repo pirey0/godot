@@ -563,7 +563,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 						}
 						ca += " };\n";
 					}
-					const String call = s_cpp_class + "::" + tgt.second + "(inst, " + s_cpp_class + "::g_gf[" + itos(tgt.first) + "], " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ")";
+					// g_gf slot referenced by the GF(<method>) macro rather than a magic index.
+					const String call = s_cpp_class + "::" + tgt.second + "(inst, GF(" + tgt.second.substr(3) + "), " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ")";
 					b += "\t{\n" + ca;
 					if (ret) {
 						b += "\t\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = " + call + "; // devirt " + String(mname) + "\n";

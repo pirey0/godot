@@ -30,12 +30,34 @@
 
 #include "gds2cpp_tool.h"
 
+#include "core/io/dir_access.h"
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "core/templates/hash_set.h"
 #include "core/templates/pair.h"
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
+
+// Recursively collect .gd file paths under p_dir (res:// relative).
+static void _collect_gd(const String &p_dir, Vector<String> &r_files) {
+	Ref<DirAccess> da = DirAccess::open(p_dir);
+	if (da.is_null()) {
+		return;
+	}
+	da->list_dir_begin();
+	for (String n = da->get_next(); !n.is_empty(); n = da->get_next()) {
+		if (n == "." || n == ".." || n.begins_with(".")) {
+			continue;
+		}
+		String full = p_dir.path_join(n);
+		if (da->current_is_dir()) {
+			_collect_gd(full, r_files);
+		} else if (n.ends_with(".gd")) {
+			r_files.push_back(full);
+		}
+	}
+	da->list_dir_end();
+}
 
 // Load a .gd file as a line vector (1-based via index-1) for comment interleaving.
 static Vector<String> _load_source_lines(const String &p_path) {
@@ -140,16 +162,23 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	HashMap<int, String> member_names = _member_names(gds, member_block);
 
 	String bodies;
-	Vector<String> ok_names;
+	Vector<Pair<String, String>> ok_names; // (original name, sanitized C++ identifier)
+	HashSet<String> taken_fn;
 	int total = 0;
 	const HashMap<StringName, GDScriptFunction *> &funcs = gds->get_member_functions();
 	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
 		total++;
+		String orig = String(E.key);
+		String cpp_name = "fn_" + _sanitize(orig); // fn_ prefix avoids leading-digit / keyword clashes
+		while (taken_fn.has(cpp_name)) {
+			cpp_name += "_";
+		}
 		bool ok = false;
-		String result = E.value->transpile_to_cpp(cls, String(E.key), src_lines, member_names, ok);
+		String result = E.value->transpile_to_cpp(cls, cpp_name, src_lines, member_names, ok);
 		if (ok) {
+			taken_fn.insert(cpp_name);
 			bodies += result + "\n";
-			ok_names.push_back(String(E.key));
+			ok_names.push_back(Pair<String, String>(orig, cpp_name));
 		}
 	}
 
@@ -163,8 +192,8 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	h += "struct " + cls + " {\n";
 	h += "\ttypedef Variant (*Fn)(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
 	h += "\tstatic Fn lookup(const StringName &p_name);\n";
-	for (const String &n : ok_names) {
-		h += "\tstatic Variant " + n + "(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
+	for (const Pair<String, String> &n : ok_names) {
+		h += "\tstatic Variant " + n.second + "(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
 	}
 	h += "};\n";
 
@@ -178,8 +207,8 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	c += member_block;
 	c += bodies;
 	c += cls + "::Fn " + cls + "::lookup(const StringName &p_name) {\n";
-	for (const String &n : ok_names) {
-		c += "\tif (p_name == StringName(\"" + n + "\")) return &" + cls + "::" + n + ";\n";
+	for (const Pair<String, String> &n : ok_names) {
+		c += "\tif (p_name == StringName(\"" + n.first + "\")) return &" + cls + "::" + n.second + ";\n";
 	}
 	c += "\treturn nullptr;\n}\n";
 
@@ -195,8 +224,53 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	return vformat("wrote %s.{h,cpp}: %d/%d functions", p_file_base, ok_names.size(), total);
 }
 
+String Gds2cppTool::analyze_dir(const String &p_root) {
+	Vector<String> files;
+	_collect_gd(p_root, files);
+
+	int total_files = 0, load_fail = 0, total_fns = 0, ok_fns = 0;
+	HashMap<String, int> block_by_op; // opcode token -> count of functions it blocks
+
+	for (const String &f : files) {
+		Ref<GDScript> gds = ResourceLoader::load(f);
+		if (gds.is_null()) {
+			load_fail++;
+			continue;
+		}
+		total_files++;
+		for (const KeyValue<StringName, GDScriptFunction *> &E : gds->get_member_functions()) {
+			total_fns++;
+			bool ok = false;
+			String res = E.value->transpile_to_cpp("X", String(E.key), Vector<String>(), HashMap<int, String>(), ok);
+			if (ok) {
+				ok_fns++;
+			} else {
+				String key = res.get_slice(" ", 0); // "OPCODE_<n>"
+				block_by_op[key] = block_by_op.has(key) ? block_by_op[key] + 1 : 1;
+			}
+		}
+	}
+
+	Vector<Pair<int, String>> sorted; // (count, opcode token)
+	for (const KeyValue<String, int> &E : block_by_op) {
+		sorted.push_back(Pair<int, String>(E.value, E.key));
+	}
+	sorted.sort_custom<PairSort<int, String>>();
+
+	String r = "=== gds2cpp analyze_dir: " + p_root + " ===\n";
+	r += vformat("files: %d loaded, %d failed to load\n", total_files, load_fail);
+	r += vformat("functions: %d total, %d transpiled (%.1f%%), %d interpreted\n",
+			total_fns, ok_fns, total_fns ? 100.0 * ok_fns / total_fns : 0.0, total_fns - ok_fns);
+	r += "--- blocking opcodes (functions blocked) ---\n";
+	for (int i = sorted.size() - 1; i >= 0; i--) {
+		r += vformat("  %s: %d\n", sorted[i].second, sorted[i].first);
+	}
+	return r;
+}
+
 void Gds2cppTool::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("analyze_script", "path"), &Gds2cppTool::analyze_script);
+	ClassDB::bind_method(D_METHOD("analyze_dir", "root"), &Gds2cppTool::analyze_dir);
 	ClassDB::bind_method(D_METHOD("transpile_script", "path", "cpp_class"), &Gds2cppTool::transpile_script);
 	ClassDB::bind_method(D_METHOD("transpile_module_files", "path", "out_dir", "cpp_class", "file_base"), &Gds2cppTool::transpile_module_files);
 }

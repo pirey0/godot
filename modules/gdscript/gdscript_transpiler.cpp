@@ -703,7 +703,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_TYPE_TEST_SCRIPT: {
-				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (_o && _o->get_script_instance() && _o->get_script_instance()->get_script() == " + _addr(_code_ptr[ip + 3]) + "->operator Object *()); }\n";
+				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); ScriptInstance *_si = _o ? _o->get_script_instance() : nullptr; Object *_exp = " + _addr(_code_ptr[ip + 3]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (_si && _si->get_script().ptr() == _exp); }\n";
 				ip += 4;
 			} break;
 			case OPCODE_JUMP_IF_SHARED: {

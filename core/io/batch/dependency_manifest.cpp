@@ -35,6 +35,7 @@
 #include "core/io/file_access.h"
 #include "core/io/resource_loader.h"
 #include "core/io/resource_uid.h"
+#include "core/os/os.h"
 #include "core/profiling/profiling.h"
 
 static const uint32_t DEPENDENCY_MANIFEST_CACHE_MAGIC = 0x424C4443; // "BLDC"
@@ -161,14 +162,23 @@ bool DependencyManifest::compute_layers() {
 	return true;
 }
 
+String DependencyManifest::cache_path_for_root(const String &p_root) {
+	String dir = GLOBAL_GET("io/batch_loader/depcache_path");
+	if (!dir.ends_with("/")) {
+		dir += "/";
+	}
+	return dir + p_root.md5_text() + ".depcache";
+}
+
 // The configured directory is deliberately expected to be a plain project resource, not under
 // res://.godot/ -- that directory is editor-only housekeeping and is never scanned by the
 // exporter, so a cache generated there could never ship with the game. A plain res:// path can
-// be pre-generated at build time (see Game.gd's "generate_depcache" cmd) and bundled into the
-// exported package via an export_presets.cfg include_filter entry, letting real players' first
-// launch read a precomputed cache instead of paying for the dependency scan themselves.
-String DependencyManifest::cache_path_for_root(const String &p_root) {
-	String dir = GLOBAL_GET("io/batch_loader/depcache_path");
+// be pre-generated at build time (see Game.gd's "generate_depcache" cmd), copied into place by
+// the build pipeline, and bundled into the exported package via an export_presets.cfg
+// include_filter entry, letting real players' first launch read a precomputed cache instead of
+// paying for the dependency scan themselves.
+String DependencyManifest::baked_cache_path_for_root(const String &p_root) {
+	String dir = GLOBAL_GET("io/batch_loader/depcache_baked_path");
 	if (!dir.ends_with("/")) {
 		dir += "/";
 	}
@@ -202,13 +212,25 @@ bool DependencyManifest::save_cache(const String &p_root) const {
 	return true;
 }
 
-bool DependencyManifest::try_load_cache(const String &p_root, DependencyManifest &r_manifest) {
-	if (!FileAccess::exists(cache_path_for_root(p_root))) {
+String DependencyManifest::pck_reference_path() {
+	String exec_path = OS::get_singleton()->get_executable_path();
+	if (exec_path.is_empty()) {
+		return String();
+	}
+	String candidate = exec_path.get_base_dir().path_join(exec_path.get_file().get_basename() + ".pck");
+	if (FileAccess::exists(candidate)) {
+		return candidate;
+	}
+	return exec_path; // embed_pck=true builds, or a pck-less dev/editor run.
+}
+
+bool DependencyManifest::load_cache_file(const String &p_path, const String &p_root, DependencyManifest &r_manifest, bool p_verify) {
+	if (!FileAccess::exists(p_path)) {
 		return false;
 	}
 
 	Error err = OK;
-	Ref<FileAccess> f = FileAccess::open(cache_path_for_root(p_root), FileAccess::READ, &err);
+	Ref<FileAccess> f = FileAccess::open(p_path, FileAccess::READ, &err);
 	if (err != OK || f.is_null()) {
 		return false;
 	}
@@ -231,7 +253,7 @@ bool DependencyManifest::try_load_cache(const String &p_root, DependencyManifest
 			deps.write[j] = f->get_pascal_string();
 		}
 
-		if (!FileAccess::exists(path) || FileAccess::get_modified_time(path) != stored_mtime) {
+		if (p_verify && (!FileAccess::exists(path) || FileAccess::get_modified_time(path) != stored_mtime)) {
 			return false; // Stale -- something in the transitive closure changed on disk.
 		}
 
@@ -244,6 +266,38 @@ bool DependencyManifest::try_load_cache(const String &p_root, DependencyManifest
 
 	r_manifest.deps_of = loaded_deps_of;
 	return true;
+}
+
+bool DependencyManifest::try_load_cache(const String &p_root, DependencyManifest &r_manifest) {
+	// Baked seed: the pipeline only ever puts a fresh, correct-by-construction cache here
+	// right before export, so if it exists for this root, trust it wholesale -- no per-file
+	// check needed or wanted (see the cost discussion that led here: this closure can run to
+	// thousands of files and gigabytes, so verifying it on every launch isn't viable).
+	if (load_cache_file(baked_cache_path_for_root(p_root), p_root, r_manifest, /*p_verify=*/false)) {
+		return true;
+	}
+
+	String live_path = cache_path_for_root(p_root);
+	if (!FileAccess::exists(live_path)) {
+		return false;
+	}
+
+	if (ProjectSettings::get_singleton()->is_using_datapack()) {
+		// Once every dependency is read out of a packed .pck, FileAccessPack reports mtime 0
+		// for all of them, so the per-file check below can never be trusted here. Instead,
+		// check one cheap thing: is the live cache file itself newer than the .pck it would
+		// have been generated against? If so, nothing in the (immutable, for this build's
+		// lifetime) pack could have changed since -- trust the whole cache. If the .pck is
+		// newer, a new build/update landed since this cache was last written, so it's stale.
+		String pck_path = pck_reference_path();
+		if (!pck_path.is_empty() && FileAccess::get_modified_time(live_path) < FileAccess::get_modified_time(pck_path)) {
+			return false;
+		}
+		return load_cache_file(live_path, p_root, r_manifest, /*p_verify=*/false);
+	}
+
+	// Loose/dev: a real filesystem with real per-file mtimes -- check each one as before.
+	return load_cache_file(live_path, p_root, r_manifest, /*p_verify=*/true);
 }
 
 DependencyManifest DependencyManifest::load_or_build(const String &p_root) {

@@ -60,7 +60,22 @@ public:
 	// cycle exists in the resource data itself (treated as a hard failure).
 	bool compute_layers();
 
+	// The live, working cache. Always a real, writable directory -- user:// is never
+	// packed, unlike res://. save_cache() always writes here.
 	static String cache_path_for_root(const String &p_root);
+	// A read-only cache baked into the exported package by the build pipeline, from a
+	// fresh scan of the exact assets being shipped. See try_load_cache().
+	static String baked_cache_path_for_root(const String &p_root);
 	bool save_cache(const String &p_root) const;
 	static bool try_load_cache(const String &p_root, DependencyManifest &r_manifest);
+
+private:
+	// Parses a single cache file. p_verify controls whether each dependency is checked
+	// against the live filesystem (existence + mtime) or trusted outright.
+	static bool load_cache_file(const String &p_path, const String &p_root, DependencyManifest &r_manifest, bool p_verify);
+	// A stat-able, never-packed reference file whose own mtime tracks "when was this
+	// build produced" -- the .pck next to the executable, or the executable itself for
+	// an embedded-pck / pck-less run. Used to judge the live cache's freshness without
+	// touching every dependency file (which reports mtime 0 once read out of a .pck).
+	static String pck_reference_path();
 };

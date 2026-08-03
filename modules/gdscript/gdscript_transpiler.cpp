@@ -51,6 +51,7 @@ static const HashMap<int, String> *s_slot_names = nullptr; // stack idx -> local
 static const HashMap<int, String> *s_gname_ident = nullptr; // global-name idx -> "GN_has"
 static HashSet<int> *s_used_slots = nullptr; // stack idxs (>=3) referenced, for alias decls
 static HashSet<int> *s_used_gnames = nullptr; // global-name idxs referenced, for the enum
+static bool s_self_used = false; // slot 0 (self) referenced this function -> emit get_owner() init
 
 // Turn an arbitrary string into a valid C++ identifier fragment.
 static String _ident(const String &p_s) {
@@ -101,6 +102,9 @@ static String _addr(int p_addr) {
 					return "(&" + (*s_slot_names)[idx] + ")";
 				}
 				return "(&t" + itos(idx) + ")";
+			}
+			if (idx == GDScriptFunction::ADDR_STACK_SELF) {
+				s_self_used = true; // slot 0 (self) referenced -> keep get_owner() init
 			}
 			return "(&s[" + itos(idx) + "])";
 		case GDScriptFunction::ADDR_TYPE_CONSTANT:
@@ -545,6 +549,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_gname_ident = &gname_ident;
 	s_used_slots = &used_slots;
 	s_used_gnames = &used_gnames;
+	s_self_used = false; // set by _addr() during pass 2 if slot 0 (self) is referenced
 
 	// Type map: typed temporaries (VM temporary_slots) + declared argument types.
 	HashMap<int, Variant::Type> slot_types = gds2cpp_temporary_slots();
@@ -1410,7 +1415,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 
 	out += "Variant " + p_cpp_class + "::" + p_cpp_func + "(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {\n";
 	out += "\tVariant s[" + itos(_stack_size > 0 ? _stack_size : 1) + "];\n";
-	out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
+	if (s_self_used) {
+		out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
+	}
 	for (int i = 0; i < _argument_count; i++) {
 		if (ro_args.has(i)) {
 			continue; // read-only: aliased to *p_args[i] below, or unused -- no copy needed

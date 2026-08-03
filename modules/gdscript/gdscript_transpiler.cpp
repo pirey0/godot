@@ -451,6 +451,8 @@ static int _instr_size(const int *p_code, int p_ip) {
 		case GDScriptFunction::OPCODE_CALL:
 		case GDScriptFunction::OPCODE_CALL_RETURN:
 		case GDScriptFunction::OPCODE_CALL_SELF_BASE:
+		case GDScriptFunction::OPCODE_CREATE_LAMBDA:
+		case GDScriptFunction::OPCODE_CREATE_SELF_LAMBDA:
 			return p_code[p_ip + 1] + 4;
 		case GDScriptFunction::OPCODE_CALL_BUILTIN_TYPE_VALIDATED:
 		case GDScriptFunction::OPCODE_CALL_UTILITY:
@@ -950,6 +952,39 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					b += "\t\telse if (_b->get_native().ptr() && _m != StringName(\"_init\")) { MethodBind *_mb = ClassDB::get_method(_b->get_native()->get_name(), _m); if (_mb && inst) { *" + dst + " = _mb->call(inst->get_owner(), " + args + ", " + itos(argc) + ", _ce); } }\n";
 					b += "\t}\n";
 				}
+				ip += iac + 4;
+			} break;
+			case OPCODE_CREATE_LAMBDA:
+			case OPCODE_CREATE_SELF_LAMBDA: {
+				// Build the capture array and wrap the lambda body GDScriptFunction (reached at
+				// runtime via gf->gds2cpp_lambda(idx)) in the same Callable the VM constructs.
+				// The body is transpiled + bound separately; when the Callable is invoked, its
+				// captures fill the leading args so dispatch routes to the C++ body automatically.
+				const bool self_lambda = (op == OPCODE_CREATE_SELF_LAMBDA);
+				const int iac = _code_ptr[ip + 1];
+				const int captures_count = _code_ptr[ip + iac + 2];
+				const int lambda_index = _code_ptr[ip + iac + 3];
+				const String result = _addr(_code_ptr[ip + 2 + captures_count]);
+				if (s_stats) {
+					s_stats->lambda_creates++;
+				}
+				b += "\t{\n";
+				b += "\t\tVector<Variant> _caps;\n";
+				if (captures_count > 0) {
+					b += "\t\t_caps.resize(" + itos(captures_count) + ");\n";
+					for (int i = 0; i < captures_count; i++) {
+						b += "\t\t_caps.write[" + itos(i) + "] = *" + _addr(_code_ptr[ip + 2 + i]) + ";\n";
+					}
+				}
+				b += "\t\tGDScriptFunction *_lam = gf->gds2cpp_lambda(" + itos(lambda_index) + ");\n";
+				if (self_lambda) {
+					b += "\t\tif (_lam && inst) { Object *_o = inst->get_owner();\n";
+					b += "\t\t\tGDScriptLambdaSelfCallable *_cb = Object::cast_to<RefCounted>(_o) ? memnew(GDScriptLambdaSelfCallable(Ref<RefCounted>(Object::cast_to<RefCounted>(_o)), _lam, _caps)) : memnew(GDScriptLambdaSelfCallable(_o, _lam, _caps));\n";
+					b += "\t\t\t*" + result + " = Callable(_cb); }\n";
+				} else {
+					b += "\t\tif (_lam) { *" + result + " = Callable(memnew(GDScriptLambdaCallable(Ref<GDScript>(gf->get_script()), _lam, _caps))); }\n";
+				}
+				b += "\t}\n";
 				ip += iac + 4;
 			} break;
 			case OPCODE_OPERATOR: {

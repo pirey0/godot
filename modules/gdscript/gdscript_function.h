@@ -269,6 +269,7 @@ struct Gds2cppStats {
 	int validated_calls = 0; // CALL_BUILTIN_TYPE_VALIDATED (already type-resolved by GDScript)
 	int super_calls = 0; // super.method() routed to a direct C++ call on the parent
 	int super_dynamic_calls = 0; // super.method() left as a runtime base-chain walk (native/untranspiled parent)
+	int lambda_creates = 0; // CREATE_LAMBDA / CREATE_SELF_LAMBDA sites emitted
 };
 
 class GDScript;
@@ -621,6 +622,9 @@ public:
 
 	// gds2cpp: stable pointer to a constant, for transpiled function bodies.
 	_FORCE_INLINE_ Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
+	// gds2cpp: this function's nested lambda bodies (CREATE_LAMBDA operand index), for transpiled bodies.
+	_FORCE_INLINE_ int gds2cpp_lambda_count() const { return _lambdas_count; }
+	_FORCE_INLINE_ GDScriptFunction *gds2cpp_lambda(int p_idx) const { return (p_idx >= 0 && p_idx < _lambdas_count) ? _lambdas_ptr[p_idx] : nullptr; }
 	// gds2cpp: runtime dispatch tables, for transpiled function bodies.
 	_FORCE_INLINE_ Variant::ValidatedOperatorEvaluator gds2cpp_operator_func(int p_idx) const { return _operator_funcs_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedKeyedGetter gds2cpp_keyed_getter(int p_idx) const { return _keyed_getters_ptr[p_idx]; }

@@ -220,6 +220,36 @@ static Vector<OkFn> _pass_a(const Ref<GDScript> &gds, const String &cls) {
 	return ok;
 }
 
+// A transpilable lambda body + how bind() reaches its live GDScriptFunction: from the enclosing
+// member function (by name, or the implicit initializer), walk gds2cpp_lambda() down `chain`.
+struct LamFn {
+	String cpp;
+	GDScriptFunction *fn = nullptr;
+	String root_key; // enclosing member function's original name
+	int root_implicit = 0; // 0 = member function, 1 = @implicit_new
+	Vector<int> chain; // gds2cpp_lambda() index path from the enclosing function
+};
+
+// Recursively gather a function's nested lambda bodies (lambdas can contain lambdas).
+static void _collect_lambdas(const String &p_root_key, int p_root_implicit, GDScriptFunction *p_fn, const Vector<int> &p_prefix, HashSet<String> &r_taken, Vector<LamFn> &r_out) {
+	const int n = p_fn->gds2cpp_lambda_count();
+	for (int i = 0; i < n; i++) {
+		GDScriptFunction *lam = p_fn->gds2cpp_lambda(i);
+		if (lam == nullptr) {
+			continue;
+		}
+		Vector<int> chain = p_prefix;
+		chain.push_back(i);
+		String cpp = "fn_lambda_" + itos(r_out.size());
+		while (r_taken.has(cpp)) {
+			cpp += "_";
+		}
+		r_taken.insert(cpp);
+		r_out.push_back(LamFn{ cpp, lam, p_root_key, p_root_implicit, chain });
+		_collect_lambdas(p_root_key, p_root_implicit, lam, chain, r_taken, r_out);
+	}
+}
+
 static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr) {
 	const String p_path = gds->get_path();
 	const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &resolver = p_resolver ? *p_resolver : _no_resolver;
@@ -248,6 +278,28 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets) + "\n";
 	}
 
+	// Pass B (lambdas): transpile each transpilable nested lambda body with the SAME class
+	// context (members / self-methods / resolver) as its enclosing function. A lambda body that
+	// does not transpile is simply left interpreted -- the CREATE_LAMBDA site still builds a
+	// working Callable, so no enclosing function is blocked by it.
+	HashSet<String> taken_names;
+	for (const OkFn &o : ok) {
+		taken_names.insert(o.cpp);
+	}
+	Vector<LamFn> lams;
+	for (const OkFn &o : ok) {
+		_collect_lambdas(o.orig, o.implicit, o.fn, Vector<int>(), taken_names, lams);
+	}
+	Vector<LamFn> ok_lams;
+	for (const LamFn &L : lams) {
+		bool okv = false;
+		String body = L.fn->transpile_to_cpp(cls, L.cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets);
+		if (okv) {
+			bodies += body + "\n";
+			ok_lams.push_back(L);
+		}
+	}
+
 	const int N = MAX(ok.size(), 1);
 
 	// --- header ---
@@ -265,6 +317,9 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	for (const OkFn &n : ok) {
 		h += "\tstatic Variant " + n.cpp + "(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
 	}
+	for (const LamFn &L : ok_lams) {
+		h += "\tstatic Variant " + L.cpp + "(GDScriptInstance *, GDScriptFunction *, const Variant **, int); // lambda\n";
+	}
 	h += "};\n";
 
 	// --- source ---
@@ -275,6 +330,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	c += "#include \"core/variant/variant_internal.h\"\n";
 	c += "#include \"modules/gdscript/gdscript.h\"\n";
 	c += "#include \"modules/gdscript/gdscript_function.h\"\n";
+	c += "#include \"modules/gdscript/gdscript_lambda_callable.h\"\n";
 	if (!resolver.is_empty()) {
 		c += "#include \"gds2cpp_all.h\" // cross-class devirt targets\n"; // NOLINT
 	}
@@ -305,6 +361,18 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 			c += "\tif (fns.has(" + key + ")) { GDScriptFunction *gf = fns[" + key + "]; GF(" + slot + ") = gf; gf->gds2cpp_set_fn(&" + cls + "::" + ok[i].cpp + "); }\n";
 		}
 	}
+	// Install lambda bodies: reach each lambda's live GDScriptFunction from its enclosing
+	// member function, then walk gds2cpp_lambda() down the recorded index chain.
+	for (const LamFn &L : ok_lams) {
+		const String root = L.root_implicit == 1
+				? "const_cast<GDScriptFunction *>(p_script->get_implicit_initializer())"
+				: ("fns.has(StringName(\"" + L.root_key + "\")) ? fns[StringName(\"" + L.root_key + "\")] : nullptr");
+		c += "\t{ GDScriptFunction *_r = " + root + ";\n";
+		for (int idx : L.chain) {
+			c += "\t\t_r = _r ? _r->gds2cpp_lambda(" + itos(idx) + ") : nullptr;\n";
+		}
+		c += "\t\tif (_r) _r->gds2cpp_set_fn(&" + cls + "::" + L.cpp + "); }\n";
+	}
 	c += "}\n\n";
 	c += member_block;
 	c += bodies;
@@ -324,7 +392,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	Ref<FileAccess> fc = FileAccess::open(p_out_dir.path_join(file_base + ".cpp"), FileAccess::WRITE);
 	fc->store_string(c);
 	fc->close();
-	return vformat("wrote %s.{h,cpp}: %d/%d functions", file_base, ok.size(), total);
+	return vformat("wrote %s.{h,cpp}: %d/%d functions + %d/%d lambda bodies", file_base, ok.size(), total, ok_lams.size(), lams.size());
 }
 
 String Gds2cppTool::transpile_module_files(const String &p_path, const String &p_out_dir, const String &p_cpp_class, const String &p_file_base) {
@@ -457,6 +525,9 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	const int specialized = stats.native_calls + stats.devirt_calls + stats.cross_calls + stats.validated_calls;
 	r += vformat("  => %.1f%% of all call sites go through pure C++ (native+devirt+cross+validated)\n",
 			all_calls ? 100.0 * specialized / all_calls : 0.0);
+	if (stats.lambda_creates > 0) {
+		r += vformat("  lambda sites emitted: %d\n", stats.lambda_creates);
+	}
 	return r;
 }
 

@@ -30,6 +30,7 @@
 
 #include "harness.h"
 
+#include "core/io/resource_loader.h"
 #include "core/os/os.h"
 #include "data_gen_auto.h"
 #include "data_spec.h"
@@ -245,6 +246,18 @@ int Gds2cppHarness::bind_all() {
 #endif
 }
 
+int Gds2cppHarness::uninstall_path(const String &p_path) {
+	Ref<GDScript> gds = ResourceLoader::load(p_path);
+	if (gds.is_null()) {
+		return 0;
+	}
+	const HashMap<StringName, GDScriptFunction *> &fns = gds->get_member_functions();
+	for (const KeyValue<StringName, GDScriptFunction *> &e : fns) {
+		e.value->gds2cpp_set_fn(nullptr);
+	}
+	return fns.size();
+}
+
 void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("run", "data", "func", "args"), &Gds2cppHarness::run);
 	ClassDB::bind_method(D_METHOD("bench", "data", "func", "args", "n"), &Gds2cppHarness::bench);
@@ -254,4 +267,5 @@ void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_enabled", "on"), &Gds2cppHarness::set_enabled);
 	ClassDB::bind_method(D_METHOD("is_enabled"), &Gds2cppHarness::is_enabled);
 	ClassDB::bind_method(D_METHOD("bind_all"), &Gds2cppHarness::bind_all);
+	ClassDB::bind_method(D_METHOD("uninstall_path", "path"), &Gds2cppHarness::uninstall_path);
 }

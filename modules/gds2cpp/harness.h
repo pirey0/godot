@@ -67,4 +67,8 @@ public:
 	// wp/ set (gds2cpp_bind_all loads each by path and binds). Returns 1 if the
 	// whole-program output was compiled in, 0 otherwise. Call once after scripts load.
 	int bind_all();
+
+	// Debug/bisect: revert the script at p_path to interpreted (clear _gds2cpp_fn on all
+	// its functions). Returns the number of functions reverted.
+	int uninstall_path(const String &p_path);
 };

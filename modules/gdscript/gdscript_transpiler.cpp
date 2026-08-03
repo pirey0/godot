@@ -68,6 +68,7 @@ static const HashMap<int, String> *s_gname_ident = nullptr; // global-name idx -
 static HashSet<int> *s_used_slots = nullptr; // stack idxs (>=3) referenced, for alias decls
 static HashSet<int> *s_used_gnames = nullptr; // global-name idxs referenced, for the enum
 static bool s_self_used = false; // slot 0 (self) referenced this function -> emit get_owner() init
+static bool s_class_used = false; // slot 1 (class) referenced -> emit class-slot init (static self-calls)
 
 // Turn an arbitrary string into a valid C++ identifier fragment.
 static String _ident(const String &p_s) {
@@ -121,6 +122,8 @@ static String _addr(int p_addr) {
 			}
 			if (idx == GDScriptFunction::ADDR_STACK_SELF) {
 				s_self_used = true; // slot 0 (self) referenced -> keep get_owner() init
+			} else if (idx == GDScriptFunction::ADDR_STACK_CLASS) {
+				s_class_used = true; // slot 1 (class) referenced -> keep class-slot init
 			}
 			return "(&s[" + itos(idx) + "])";
 		case GDScriptFunction::ADDR_TYPE_CONSTANT:
@@ -566,6 +569,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_used_slots = &used_slots;
 	s_used_gnames = &used_gnames;
 	s_self_used = false; // set by _addr() during pass 2 if slot 0 (self) is referenced
+	s_class_used = false; // set by _addr() during pass 2 if slot 1 (class) is referenced
 
 	// Type map: typed temporaries (VM temporary_slots) + declared argument types.
 	HashMap<int, Variant::Type> slot_types = gds2cpp_temporary_slots();
@@ -676,7 +680,11 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			live.clear();
 			int t = (int)op - (int)OPCODE_TYPE_ADJUST_BOOL + (int)Variant::BOOL;
 			const String a = _addr(_code_ptr[ip + 1]);
-			b += "\t{ Variant *_a = " + a + "; if (_a->get_type() != (Variant::Type)" + itos(t) + ") { const Variant *_ai = _a; Callable::CallError _ce; Variant _tmp; Variant::construct((Variant::Type)" + itos(t) + ", _tmp, &_ai, 1, _ce); *_a = _tmp; } }\n";
+			// TYPE_ADJUST only ensures the slot's TYPE (VariantTypeChanger: clear + default-init
+			// on mismatch); it does NOT convert the current value. Default-construct rather than
+			// converting from the current value -- converting e.g. NIL -> PackedStringArray
+			// produces a garbage container that a following validated write then corrupts.
+			b += "\t{ Variant *_a = " + a + "; if (_a->get_type() != (Variant::Type)" + itos(t) + ") { Callable::CallError _ce; Variant::construct((Variant::Type)" + itos(t) + ", *_a, nullptr, 0, _ce); } }\n";
 			ip += 2;
 			continue;
 		}
@@ -1288,9 +1296,12 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					}
 					b += " };\n";
 				}
-				b += "\t\tCallable::CallError _ce; Variant _r = gf->gds2cpp_method(" + itos(method_idx) + ")->call(nullptr, " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				// Validated static native call: the VM uses MethodBind::validated_call
+				// (not the generic ::call, which crashes for validated static binds).
 				if (ret) {
-					b += "\t\t*" + _addr(_code_ptr[ip + 2 + argc]) + " = _r;\n";
+					b += "\t\tgf->gds2cpp_method(" + itos(method_idx) + ")->validated_call(nullptr, " + (argc > 0 ? "ca" : "nullptr") + ", " + _addr(_code_ptr[ip + 2 + argc]) + ");\n";
+				} else {
+					b += "\t\tgf->gds2cpp_method(" + itos(method_idx) + ")->validated_call(nullptr, " + (argc > 0 ? "ca" : "nullptr") + ", nullptr);\n";
 				}
 				b += "\t}\n";
 				ip += iac + 4;
@@ -1433,6 +1444,11 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	out += "\tVariant s[" + itos(_stack_size > 0 ? _stack_size : 1) + "];\n";
 	if (s_self_used) {
 		out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
+	}
+	if (s_class_used) {
+		// Class slot (ADDR_STACK_CLASS): the VM sets stack[1] = Variant(script); static
+		// self-calls (e.g. a static method calling another static method) callp on it.
+		out += "\ts[1] = Variant(gf->get_script());\n";
 	}
 	for (int i = 0; i < _argument_count; i++) {
 		if (ro_args.has(i)) {

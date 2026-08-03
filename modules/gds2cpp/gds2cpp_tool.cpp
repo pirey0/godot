@@ -205,26 +205,16 @@ static Vector<OkFn> _pass_a(const Ref<GDScript> &gds, const String &cls) {
 			ok.push_back(OkFn{ String(E.key), cpp_name, E.value });
 		}
 	}
-	// @implicit_new / @implicit_ready are stored outside member_functions (they run on
-	// every .new()/_ready) -- transpile + bind them too.
-	struct Impl {
-		const GDScriptFunction *fn;
-		const char *orig;
-		const char *cpp;
-		int kind;
-	};
-	Impl impls[2] = {
-		{ gds->get_implicit_initializer(), "@implicit_new", "fn__implicit_new", 1 },
-		{ gds->get_implicit_ready(), "@implicit_ready", "fn__implicit_ready", 2 },
-	};
-	for (const Impl &im : impls) {
-		if (im.fn == nullptr) {
-			continue;
-		}
+	// @implicit_new (the auto-generated member initializer, run on every .new()) is stored
+	// outside member_functions -- transpile + bind it too (value-correctness verified).
+	// @implicit_ready (onready-var init on tree entry) is deliberately left interpreted
+	// until its $-path / get_node handling is verified.
+	const GDScriptFunction *ctor = gds->get_implicit_initializer();
+	if (ctor != nullptr) {
 		bool okv = false;
-		im.fn->transpile_to_cpp(cls, im.cpp, src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), okv);
+		ctor->transpile_to_cpp(cls, "fn__implicit_new", src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), okv);
 		if (okv) {
-			ok.push_back(OkFn{ im.orig, im.cpp, const_cast<GDScriptFunction *>(im.fn), im.kind });
+			ok.push_back(OkFn{ "@implicit_new", "fn__implicit_new", const_cast<GDScriptFunction *>(ctor), 1 });
 		}
 	}
 	return ok;

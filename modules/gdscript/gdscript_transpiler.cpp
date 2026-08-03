@@ -351,14 +351,16 @@ static int _dst_stack_slot(const int *code, int ip) {
 }
 
 // A named reference to a global name (method/property), recording the use for the enum.
+// Indexes the per-call hoisted `_gn` names-table base (see the prologue): a const-ref into the
+// table, avoiding the by-value StringName copy + bounds check that get_global_name() does per use.
 static String _gname(int p_idx) {
 	if (s_used_gnames) {
 		s_used_gnames->insert(p_idx);
 	}
 	if (s_gname_ident && s_gname_ident->has(p_idx)) {
-		return "gf->get_global_name(" + (*s_gname_ident)[p_idx] + ")";
+		return "_gn[" + (*s_gname_ident)[p_idx] + "]";
 	}
-	return "gf->get_global_name(" + itos(p_idx) + ")";
+	return "_gn[" + itos(p_idx) + "]";
 }
 
 // Instruction size for the opcodes we support (some are variable-length).
@@ -1592,6 +1594,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			out += (k ? "\", \"" : "") + String(get_global_name(gi[k]));
 		}
 		out += "\"\n";
+		// Hoist the names-table base once; body references _gn[GN_x] (const-ref, no copy).
+		out += "\tconst StringName *_gn = gf->gds2cpp_global_names_ptr();\n";
 	}
 	// Readable aliases for the stack slots this function uses.
 	if (!used_slots.is_empty()) {

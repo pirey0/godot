@@ -622,6 +622,9 @@ public:
 
 	// gds2cpp: stable pointer to a constant, for transpiled function bodies.
 	_FORCE_INLINE_ Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
+	// gds2cpp: base of the global-names table -- hoisted once per call so transpiled bodies index
+	// it directly (const-ref, no per-use StringName copy or bounds check) instead of get_global_name().
+	_FORCE_INLINE_ const StringName *gds2cpp_global_names_ptr() const { return _global_names_ptr; }
 	// gds2cpp: this function's nested lambda bodies (CREATE_LAMBDA operand index), for transpiled bodies.
 	_FORCE_INLINE_ int gds2cpp_lambda_count() const { return _lambdas_count; }
 	_FORCE_INLINE_ GDScriptFunction *gds2cpp_lambda(int p_idx) const { return (p_idx >= 0 && p_idx < _lambdas_count) ? _lambdas_ptr[p_idx] : nullptr; }

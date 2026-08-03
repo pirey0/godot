@@ -496,7 +496,13 @@ void (*type_init_function_table[])(Variant *) = {
 #define METHOD_CALL_ON_FREED_INSTANCE_ERROR(method_pointer) "Cannot call method '" + (method_pointer)->get_name() + "' on a previously freed instance."
 
 Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state) {
-	GodotProfileZoneScript(this, source, name, name, _initial_line);
+	// gds2cpp: dispatch to the transpiled C++ body when enabled. Guarded to the cases the
+	// transpiled bodies handle faithfully: not resuming a coroutine (p_state), and all
+	// arguments explicitly provided (they don't synthesize default arguments). Anything
+	// else falls through to the interpreter below. One script zone wraps the whole call,
+	// colored green for the C++ path / blue for the interpreter, so times compare directly.
+	const bool gds2cpp_go = gds2cpp_enabled && _gds2cpp_fn != nullptr && p_state == nullptr && p_argcount == _argument_count;
+	GodotProfileZoneScriptMaybeCpp(gds2cpp_go, _gds2cpp_fn, this, source, name, name, _initial_line);
 
 	OPCODES_TABLE;
 
@@ -506,14 +512,7 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 
 	r_err.error = Callable::CallError::CALL_OK;
 
-	// gds2cpp: dispatch to the transpiled C++ body when enabled. Guarded to the cases the
-	// transpiled bodies handle faithfully: not resuming a coroutine (p_state), and all
-	// arguments explicitly provided (they don't synthesize default arguments). Anything
-	// else falls through to the interpreter below.
-	if (gds2cpp_enabled && _gds2cpp_fn != nullptr && p_state == nullptr && p_argcount == _argument_count) {
-		// Distinct (green) Tracy zone keyed by the transpiled fn pointer: confirms the C++
-		// body ran and lets it be compared against the interpreted (blue) zone for the same fn.
-		GodotProfileZoneScriptCpp(_gds2cpp_fn, source, name, name, _initial_line);
+	if (gds2cpp_go) {
 		return _gds2cpp_fn(p_instance, this, p_args, p_argcount);
 	}
 

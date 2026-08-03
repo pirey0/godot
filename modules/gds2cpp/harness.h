@@ -52,4 +52,14 @@ public:
 
 	// Three-way: interpreted vs faithful-transpiled vs type-specialized; returns report.
 	Dictionary bench3(Object *p_data, const String &p_func, const Array &p_args, int n);
+
+	// --- Live dispatch (run the real game through the transpiled bodies) ---
+	// Install the compiled-in transpiled bodies onto p_obj's GDScript so the engine
+	// dispatches to them. Only methods whose names match are installed; safe to call on
+	// any script. Returns the number of scripts whose functions were bound (0 or 1).
+	int install(Object *p_obj);
+	// Global on/off: when true, GDScriptFunction::call() routes any function with an
+	// installed transpiled body to the C++ version instead of the interpreter.
+	void set_enabled(bool p_on);
+	bool is_enabled() const;
 };

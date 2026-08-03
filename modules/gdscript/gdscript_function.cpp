@@ -104,6 +104,8 @@ void GDScriptFunction::debug_get_stack_member_state(int p_line, List<Pair<String
 	}
 }
 
+bool GDScriptFunction::gds2cpp_enabled = false; // off by default; flip via Gds2cppTool.set_enabled(true)
+
 GDScriptFunction::GDScriptFunction() {
 	name = "<anonymous>";
 #ifdef DEBUG_ENABLED

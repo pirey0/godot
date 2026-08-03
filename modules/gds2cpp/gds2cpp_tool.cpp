@@ -280,7 +280,11 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	c += "void " + cls + "::bind(GDScript *p_script) {\n";
 	c += "\tconst HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();\n";
 	for (int i = 0; i < ok.size(); i++) {
-		c += "\tif (fns.has(StringName(\"" + ok[i].orig + "\"))) GF(" + ok[i].cpp.substr(3) + ") = fns[StringName(\"" + ok[i].orig + "\")];\n";
+		// Fill the g_gf devirt table AND install the transpiled body on the live
+		// GDScriptFunction so GDScriptFunction::call() can dispatch to it directly.
+		const String slot = ok[i].cpp.substr(3);
+		const String key = "StringName(\"" + ok[i].orig + "\")";
+		c += "\tif (fns.has(" + key + ")) { GDScriptFunction *gf = fns[" + key + "]; GF(" + slot + ") = gf; gf->gds2cpp_set_fn(&" + cls + "::" + ok[i].cpp + "); }\n";
 	}
 	c += "}\n\n";
 	c += member_block;

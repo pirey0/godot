@@ -632,6 +632,12 @@ public:
 	_FORCE_INLINE_ int gds2cpp_default_arg_count() const { return _default_arg_count; }
 	_FORCE_INLINE_ int gds2cpp_default_arg(int p_idx) const { return _default_arg_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedConstructor gds2cpp_constructor(int p_idx) const { return _constructors_ptr[p_idx]; }
+	// gds2cpp: direct dispatch to a transpiled C++ body for this function.
+	// bind() (generated) installs _gds2cpp_fn; call() routes to it when gds2cpp_enabled.
+	typedef Variant (*Gds2cppFn)(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static bool gds2cpp_enabled; // global on/off toggle for transpiled dispatch
+	Gds2cppFn _gds2cpp_fn = nullptr; // transpiled body, or null if this fn isn't transpiled
+	_FORCE_INLINE_ void gds2cpp_set_fn(Gds2cppFn p_fn) { _gds2cpp_fn = p_fn; }
 	// gds2cpp: typed temporary stack slots the VM pre-initializes at entry so validated
 	// calls can write into correctly-typed destinations. Transpiled code must do the same.
 	_FORCE_INLINE_ const HashMap<int, Variant::Type> &gds2cpp_temporary_slots() const { return temporary_slots; }

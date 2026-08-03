@@ -104,187 +104,309 @@ GDScriptFunction *OpTest_gen::g_gf[61] = {};
 void OpTest_gen::bind(GDScript *p_script) {
 	const HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();
 	if (fns.has(StringName("t_op_add"))) {
-		GF(t_op_add) = fns[StringName("t_op_add")];
+		GDScriptFunction *gf = fns[StringName("t_op_add")];
+		GF(t_op_add) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_add);
 	}
 	if (fns.has(StringName("t_op_arith"))) {
-		GF(t_op_arith) = fns[StringName("t_op_arith")];
+		GDScriptFunction *gf = fns[StringName("t_op_arith")];
+		GF(t_op_arith) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_arith);
 	}
 	if (fns.has(StringName("t_op_cmp"))) {
-		GF(t_op_cmp) = fns[StringName("t_op_cmp")];
+		GDScriptFunction *gf = fns[StringName("t_op_cmp")];
+		GF(t_op_cmp) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_cmp);
 	}
 	if (fns.has(StringName("t_op_eq"))) {
-		GF(t_op_eq) = fns[StringName("t_op_eq")];
+		GDScriptFunction *gf = fns[StringName("t_op_eq")];
+		GF(t_op_eq) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_eq);
 	}
 	if (fns.has(StringName("t_op_bit"))) {
-		GF(t_op_bit) = fns[StringName("t_op_bit")];
+		GDScriptFunction *gf = fns[StringName("t_op_bit")];
+		GF(t_op_bit) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_bit);
 	}
 	if (fns.has(StringName("t_op_not"))) {
-		GF(t_op_not) = fns[StringName("t_op_not")];
+		GDScriptFunction *gf = fns[StringName("t_op_not")];
+		GF(t_op_not) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_not);
 	}
 	if (fns.has(StringName("t_op_neg"))) {
-		GF(t_op_neg) = fns[StringName("t_op_neg")];
+		GDScriptFunction *gf = fns[StringName("t_op_neg")];
+		GF(t_op_neg) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_neg);
 	}
 	if (fns.has(StringName("t_op_mod"))) {
-		GF(t_op_mod) = fns[StringName("t_op_mod")];
+		GDScriptFunction *gf = fns[StringName("t_op_mod")];
+		GF(t_op_mod) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_mod);
 	}
 	if (fns.has(StringName("t_op_in"))) {
-		GF(t_op_in) = fns[StringName("t_op_in")];
+		GDScriptFunction *gf = fns[StringName("t_op_in")];
+		GF(t_op_in) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_in);
 	}
 	if (fns.has(StringName("t_op_str_concat"))) {
-		GF(t_op_str_concat) = fns[StringName("t_op_str_concat")];
+		GDScriptFunction *gf = fns[StringName("t_op_str_concat")];
+		GF(t_op_str_concat) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_op_str_concat);
 	}
 	if (fns.has(StringName("t_construct_vec2"))) {
-		GF(t_construct_vec2) = fns[StringName("t_construct_vec2")];
+		GDScriptFunction *gf = fns[StringName("t_construct_vec2")];
+		GF(t_construct_vec2) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_construct_vec2);
 	}
 	if (fns.has(StringName("t_construct_vec3"))) {
-		GF(t_construct_vec3) = fns[StringName("t_construct_vec3")];
+		GDScriptFunction *gf = fns[StringName("t_construct_vec3")];
+		GF(t_construct_vec3) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_construct_vec3);
 	}
 	if (fns.has(StringName("t_construct_color"))) {
-		GF(t_construct_color) = fns[StringName("t_construct_color")];
+		GDScriptFunction *gf = fns[StringName("t_construct_color")];
+		GF(t_construct_color) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_construct_color);
 	}
 	if (fns.has(StringName("t_construct_array"))) {
-		GF(t_construct_array) = fns[StringName("t_construct_array")];
+		GDScriptFunction *gf = fns[StringName("t_construct_array")];
+		GF(t_construct_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_construct_array);
 	}
 	if (fns.has(StringName("t_construct_dict"))) {
-		GF(t_construct_dict) = fns[StringName("t_construct_dict")];
+		GDScriptFunction *gf = fns[StringName("t_construct_dict")];
+		GF(t_construct_dict) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_construct_dict);
 	}
 	if (fns.has(StringName("t_typed_array"))) {
-		GF(t_typed_array) = fns[StringName("t_typed_array")];
+		GDScriptFunction *gf = fns[StringName("t_typed_array")];
+		GF(t_typed_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_typed_array);
 	}
 	if (fns.has(StringName("t_typed_dict"))) {
-		GF(t_typed_dict) = fns[StringName("t_typed_dict")];
+		GDScriptFunction *gf = fns[StringName("t_typed_dict")];
+		GF(t_typed_dict) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_typed_dict);
 	}
 	if (fns.has(StringName("t_get_indexed"))) {
-		GF(t_get_indexed) = fns[StringName("t_get_indexed")];
+		GDScriptFunction *gf = fns[StringName("t_get_indexed")];
+		GF(t_get_indexed) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_get_indexed);
 	}
 	if (fns.has(StringName("t_set_indexed"))) {
-		GF(t_set_indexed) = fns[StringName("t_set_indexed")];
+		GDScriptFunction *gf = fns[StringName("t_set_indexed")];
+		GF(t_set_indexed) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_set_indexed);
 	}
 	if (fns.has(StringName("t_get_keyed"))) {
-		GF(t_get_keyed) = fns[StringName("t_get_keyed")];
+		GDScriptFunction *gf = fns[StringName("t_get_keyed")];
+		GF(t_get_keyed) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_get_keyed);
 	}
 	if (fns.has(StringName("t_set_keyed"))) {
-		GF(t_set_keyed) = fns[StringName("t_set_keyed")];
+		GDScriptFunction *gf = fns[StringName("t_set_keyed")];
+		GF(t_set_keyed) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_set_keyed);
 	}
 	if (fns.has(StringName("t_get_named"))) {
-		GF(t_get_named) = fns[StringName("t_get_named")];
+		GDScriptFunction *gf = fns[StringName("t_get_named")];
+		GF(t_get_named) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_get_named);
 	}
 	if (fns.has(StringName("t_set_named"))) {
-		GF(t_set_named) = fns[StringName("t_set_named")];
+		GDScriptFunction *gf = fns[StringName("t_set_named")];
+		GF(t_set_named) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_set_named);
 	}
 	if (fns.has(StringName("t_get_member"))) {
-		GF(t_get_member) = fns[StringName("t_get_member")];
+		GDScriptFunction *gf = fns[StringName("t_get_member")];
+		GF(t_get_member) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_get_member);
 	}
 	if (fns.has(StringName("t_set_member"))) {
-		GF(t_set_member) = fns[StringName("t_set_member")];
+		GDScriptFunction *gf = fns[StringName("t_set_member")];
+		GF(t_set_member) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_set_member);
 	}
 	if (fns.has(StringName("t_member_arr"))) {
-		GF(t_member_arr) = fns[StringName("t_member_arr")];
+		GDScriptFunction *gf = fns[StringName("t_member_arr")];
+		GF(t_member_arr) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_member_arr);
 	}
 	if (fns.has(StringName("t_member_dict_str"))) {
-		GF(t_member_dict_str) = fns[StringName("t_member_dict_str")];
+		GDScriptFunction *gf = fns[StringName("t_member_dict_str")];
+		GF(t_member_dict_str) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_member_dict_str);
 	}
 	if (fns.has(StringName("t_cast_int"))) {
-		GF(t_cast_int) = fns[StringName("t_cast_int")];
+		GDScriptFunction *gf = fns[StringName("t_cast_int")];
+		GF(t_cast_int) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_cast_int);
 	}
 	if (fns.has(StringName("t_cast_float"))) {
-		GF(t_cast_float) = fns[StringName("t_cast_float")];
+		GDScriptFunction *gf = fns[StringName("t_cast_float")];
+		GF(t_cast_float) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_cast_float);
 	}
 	if (fns.has(StringName("t_cast_string"))) {
-		GF(t_cast_string) = fns[StringName("t_cast_string")];
+		GDScriptFunction *gf = fns[StringName("t_cast_string")];
+		GF(t_cast_string) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_cast_string);
 	}
 	if (fns.has(StringName("t_is_builtin"))) {
-		GF(t_is_builtin) = fns[StringName("t_is_builtin")];
+		GDScriptFunction *gf = fns[StringName("t_is_builtin")];
+		GF(t_is_builtin) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_is_builtin);
 	}
 	if (fns.has(StringName("t_is_array"))) {
-		GF(t_is_array) = fns[StringName("t_is_array")];
+		GDScriptFunction *gf = fns[StringName("t_is_array")];
+		GF(t_is_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_is_array);
 	}
 	if (fns.has(StringName("t_is_string"))) {
-		GF(t_is_string) = fns[StringName("t_is_string")];
+		GDScriptFunction *gf = fns[StringName("t_is_string")];
+		GF(t_is_string) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_is_string);
 	}
 	if (fns.has(StringName("t_if"))) {
-		GF(t_if) = fns[StringName("t_if")];
+		GDScriptFunction *gf = fns[StringName("t_if")];
+		GF(t_if) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_if);
 	}
 	if (fns.has(StringName("t_while"))) {
-		GF(t_while) = fns[StringName("t_while")];
+		GDScriptFunction *gf = fns[StringName("t_while")];
+		GF(t_while) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_while);
 	}
 	if (fns.has(StringName("t_ternary"))) {
-		GF(t_ternary) = fns[StringName("t_ternary")];
+		GDScriptFunction *gf = fns[StringName("t_ternary")];
+		GF(t_ternary) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_ternary);
 	}
 	if (fns.has(StringName("t_for_range"))) {
-		GF(t_for_range) = fns[StringName("t_for_range")];
+		GDScriptFunction *gf = fns[StringName("t_for_range")];
+		GF(t_for_range) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_range);
 	}
 	if (fns.has(StringName("t_for_range3"))) {
-		GF(t_for_range3) = fns[StringName("t_for_range3")];
+		GDScriptFunction *gf = fns[StringName("t_for_range3")];
+		GF(t_for_range3) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_range3);
 	}
 	if (fns.has(StringName("t_for_array"))) {
-		GF(t_for_array) = fns[StringName("t_for_array")];
+		GDScriptFunction *gf = fns[StringName("t_for_array")];
+		GF(t_for_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_array);
 	}
 	if (fns.has(StringName("t_for_int_array"))) {
-		GF(t_for_int_array) = fns[StringName("t_for_int_array")];
+		GDScriptFunction *gf = fns[StringName("t_for_int_array")];
+		GF(t_for_int_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_int_array);
 	}
 	if (fns.has(StringName("t_for_float"))) {
-		GF(t_for_float) = fns[StringName("t_for_float")];
+		GDScriptFunction *gf = fns[StringName("t_for_float")];
+		GF(t_for_float) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_float);
 	}
 	if (fns.has(StringName("t_for_string"))) {
-		GF(t_for_string) = fns[StringName("t_for_string")];
+		GDScriptFunction *gf = fns[StringName("t_for_string")];
+		GF(t_for_string) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_string);
 	}
 	if (fns.has(StringName("t_for_dict"))) {
-		GF(t_for_dict) = fns[StringName("t_for_dict")];
+		GDScriptFunction *gf = fns[StringName("t_for_dict")];
+		GF(t_for_dict) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_dict);
 	}
 	if (fns.has(StringName("t_for_packed_int"))) {
-		GF(t_for_packed_int) = fns[StringName("t_for_packed_int")];
+		GDScriptFunction *gf = fns[StringName("t_for_packed_int")];
+		GF(t_for_packed_int) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_packed_int);
 	}
 	if (fns.has(StringName("t_for_packed_str"))) {
-		GF(t_for_packed_str) = fns[StringName("t_for_packed_str")];
+		GDScriptFunction *gf = fns[StringName("t_for_packed_str")];
+		GF(t_for_packed_str) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_packed_str);
 	}
 	if (fns.has(StringName("t_for_vec2"))) {
-		GF(t_for_vec2) = fns[StringName("t_for_vec2")];
+		GDScriptFunction *gf = fns[StringName("t_for_vec2")];
+		GF(t_for_vec2) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_for_vec2);
 	}
 	if (fns.has(StringName("t_call_utility"))) {
-		GF(t_call_utility) = fns[StringName("t_call_utility")];
+		GDScriptFunction *gf = fns[StringName("t_call_utility")];
+		GF(t_call_utility) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_call_utility);
 	}
 	if (fns.has(StringName("t_call_len"))) {
-		GF(t_call_len) = fns[StringName("t_call_len")];
+		GDScriptFunction *gf = fns[StringName("t_call_len")];
+		GF(t_call_len) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_call_len);
 	}
 	if (fns.has(StringName("t_call_self"))) {
-		GF(t_call_self) = fns[StringName("t_call_self")];
+		GDScriptFunction *gf = fns[StringName("t_call_self")];
+		GF(t_call_self) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_call_self);
 	}
 	if (fns.has(StringName("t_call_builtin_static"))) {
-		GF(t_call_builtin_static) = fns[StringName("t_call_builtin_static")];
+		GDScriptFunction *gf = fns[StringName("t_call_builtin_static")];
+		GF(t_call_builtin_static) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_call_builtin_static);
 	}
 	if (fns.has(StringName("t_call_method"))) {
-		GF(t_call_method) = fns[StringName("t_call_method")];
+		GDScriptFunction *gf = fns[StringName("t_call_method")];
+		GF(t_call_method) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_call_method);
 	}
 	if (fns.has(StringName("t_ret_int"))) {
-		GF(t_ret_int) = fns[StringName("t_ret_int")];
+		GDScriptFunction *gf = fns[StringName("t_ret_int")];
+		GF(t_ret_int) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_ret_int);
 	}
 	if (fns.has(StringName("t_ret_array"))) {
-		GF(t_ret_array) = fns[StringName("t_ret_array")];
+		GDScriptFunction *gf = fns[StringName("t_ret_array")];
+		GF(t_ret_array) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_ret_array);
 	}
 	if (fns.has(StringName("t_ret_dict"))) {
-		GF(t_ret_dict) = fns[StringName("t_ret_dict")];
+		GDScriptFunction *gf = fns[StringName("t_ret_dict")];
+		GF(t_ret_dict) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_ret_dict);
 	}
 	if (fns.has(StringName("t_assert"))) {
-		GF(t_assert) = fns[StringName("t_assert")];
+		GDScriptFunction *gf = fns[StringName("t_assert")];
+		GF(t_assert) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_assert);
 	}
 	if (fns.has(StringName("t_string_ops"))) {
-		GF(t_string_ops) = fns[StringName("t_string_ops")];
+		GDScriptFunction *gf = fns[StringName("t_string_ops")];
+		GF(t_string_ops) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_string_ops);
 	}
 	if (fns.has(StringName("t_static_get"))) {
-		GF(t_static_get) = fns[StringName("t_static_get")];
+		GDScriptFunction *gf = fns[StringName("t_static_get")];
+		GF(t_static_get) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_static_get);
 	}
 	if (fns.has(StringName("t_static_set"))) {
-		GF(t_static_set) = fns[StringName("t_static_set")];
+		GDScriptFunction *gf = fns[StringName("t_static_set")];
+		GF(t_static_set) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_static_set);
 	}
 	if (fns.has(StringName("t_typed_dict2"))) {
-		GF(t_typed_dict2) = fns[StringName("t_typed_dict2")];
+		GDScriptFunction *gf = fns[StringName("t_typed_dict2")];
+		GF(t_typed_dict2) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_typed_dict2);
 	}
 	if (fns.has(StringName("t_method_bind_validated"))) {
-		GF(t_method_bind_validated) = fns[StringName("t_method_bind_validated")];
+		GDScriptFunction *gf = fns[StringName("t_method_bind_validated")];
+		GF(t_method_bind_validated) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_method_bind_validated);
 	}
 	if (fns.has(StringName("t_native_static"))) {
-		GF(t_native_static) = fns[StringName("t_native_static")];
+		GDScriptFunction *gf = fns[StringName("t_native_static")];
+		GF(t_native_static) = gf;
+		gf->gds2cpp_set_fn(&OpTest_gen::fn_t_native_static);
 	}
 }
 

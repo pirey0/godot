@@ -207,9 +207,35 @@ Dictionary Gds2cppHarness::bench3(Object *p_data, const String &p_func, const Ar
 	return out;
 }
 
+int Gds2cppHarness::install(Object *p_obj) {
+	if (!p_obj) {
+		return 0;
+	}
+	Ref<GDScript> gds = p_obj->get_script();
+	if (gds.is_null()) {
+		return 0;
+	}
+	// bind() only touches functions whose names match, so binding every compiled-in
+	// class against the script is safe -- non-matching classes are no-ops.
+	Data_gen::bind(gds.ptr());
+	OpTest_gen::bind(gds.ptr());
+	return 1;
+}
+
+void Gds2cppHarness::set_enabled(bool p_on) {
+	GDScriptFunction::gds2cpp_enabled = p_on;
+}
+
+bool Gds2cppHarness::is_enabled() const {
+	return GDScriptFunction::gds2cpp_enabled;
+}
+
 void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("run", "data", "func", "args"), &Gds2cppHarness::run);
 	ClassDB::bind_method(D_METHOD("bench", "data", "func", "args", "n"), &Gds2cppHarness::bench);
 	ClassDB::bind_method(D_METHOD("bench3", "data", "func", "args", "n"), &Gds2cppHarness::bench3);
 	ClassDB::bind_method(D_METHOD("probe_bm", "data", "func", "idx", "base", "args"), &Gds2cppHarness::probe_bm);
+	ClassDB::bind_method(D_METHOD("install", "obj"), &Gds2cppHarness::install);
+	ClassDB::bind_method(D_METHOD("set_enabled", "on"), &Gds2cppHarness::set_enabled);
+	ClassDB::bind_method(D_METHOD("is_enabled"), &Gds2cppHarness::is_enabled);
 }

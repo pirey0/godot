@@ -506,6 +506,14 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 
 	r_err.error = Callable::CallError::CALL_OK;
 
+	// gds2cpp: dispatch to the transpiled C++ body when enabled. Guarded to the cases the
+	// transpiled bodies handle faithfully: not resuming a coroutine (p_state), and all
+	// arguments explicitly provided (they don't synthesize default arguments). Anything
+	// else falls through to the interpreter below.
+	if (gds2cpp_enabled && _gds2cpp_fn != nullptr && p_state == nullptr && p_argcount == _argument_count) {
+		return _gds2cpp_fn(p_instance, this, p_args, p_argcount);
+	}
+
 	static thread_local int call_depth = 0;
 	if (unlikely(++call_depth > MAX_CALL_DEPTH)) {
 		call_depth--;

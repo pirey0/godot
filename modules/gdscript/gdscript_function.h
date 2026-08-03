@@ -270,6 +270,7 @@ struct Gds2cppStats {
 	int super_calls = 0; // super.method() routed to a direct C++ call on the parent
 	int super_dynamic_calls = 0; // super.method() left as a runtime base-chain walk (native/untranspiled parent)
 	int lambda_creates = 0; // CREATE_LAMBDA / CREATE_SELF_LAMBDA sites emitted
+	int native_ops = 0; // OPERATOR_VALIDATED lowered to a direct native scalar op (no dispatch)
 };
 
 class GDScript;

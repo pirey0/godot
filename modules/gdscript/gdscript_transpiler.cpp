@@ -182,6 +182,53 @@ static Variant::Type _operand_type(int p_addr) {
 	return Variant::NIL;
 }
 
+// gds2cpp OPT-1: inline a validated scalar operator into a direct native op on the Variant
+// payloads (VariantInternal), skipping the indirect evaluator dispatch. The validated evaluator
+// writes only the payload (r_ret is assumed pre-typed by the temporary-slot init), so a native
+// `*get_R(dst) = *get_A(a) <op> *get_B(b)` is byte-for-byte identical to what dispatch would do.
+// The operand types come from the static oracle, but the RESULT is trusted only when the stored
+// evaluator matches get_validated_operator_evaluator(op, at, bt) -- so a wrong type guess simply
+// fails to match and falls back. Returns "" when not a safe scalar case.
+static String _native_scalar_getter(Variant::Type t) {
+	return t == Variant::INT ? "get_int" : (t == Variant::FLOAT ? "get_float" : "get_bool");
+}
+static bool _is_scalar_type(Variant::Type t) {
+	return t == Variant::INT || t == Variant::FLOAT || t == Variant::BOOL;
+}
+static String _native_operator(Variant::ValidatedOperatorEvaluator p_eval, int p_a, int p_b, int p_dst) {
+	struct OpMap {
+		Variant::Operator op;
+		const char *cpp;
+	};
+	// Safe subset: arithmetic (NOT DIV/MOD -- division-by-zero differs) + comparisons.
+	static const OpMap ops[] = {
+		{ Variant::OP_ADD, "+" }, { Variant::OP_SUBTRACT, "-" }, { Variant::OP_MULTIPLY, "*" },
+		{ Variant::OP_EQUAL, "==" }, { Variant::OP_NOT_EQUAL, "!=" },
+		{ Variant::OP_LESS, "<" }, { Variant::OP_LESS_EQUAL, "<=" },
+		{ Variant::OP_GREATER, ">" }, { Variant::OP_GREATER_EQUAL, ">=" }
+	};
+	// Recover (op, operand types) from the stored evaluator itself: each (op, at, bt) is a distinct
+	// template instantiation, so a pointer match uniquely identifies the operation AND the exact
+	// runtime operand types GDScript resolved (authoritative -- no reliance on the type oracle,
+	// and no risk of a wrong guess since a mismatch just falls through to dispatch).
+	static const Variant::Type scalars[] = { Variant::BOOL, Variant::INT, Variant::FLOAT };
+	for (const OpMap &m : ops) {
+		for (Variant::Type at : scalars) {
+			for (Variant::Type bt : scalars) {
+				if (Variant::get_validated_operator_evaluator(m.op, at, bt) != p_eval) {
+					continue;
+				}
+				const Variant::Type rt = Variant::get_operator_return_type(m.op, at, bt);
+				if (!_is_scalar_type(rt)) {
+					return String();
+				}
+				return "*VariantInternal::" + _native_scalar_getter(rt) + "(" + _addr(p_dst) + ") = *VariantInternal::" + _native_scalar_getter(at) + "(" + _addr(p_a) + ") " + String(m.cpp) + " *VariantInternal::" + _native_scalar_getter(bt) + "(" + _addr(p_b) + ");";
+			}
+		}
+	}
+	return String();
+}
+
 // Native C++ expression for a value-returning builtin method on a known-type base,
 // or "" if not in the curated set (caller then falls back to dynamic dispatch).
 // p_base / p_args are `Variant *` expressions; the result is assignable to a Variant.
@@ -995,7 +1042,16 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 7 + (int)(sizeof(Variant::ValidatedOperatorEvaluator) / sizeof(int));
 			} break;
 			case OPCODE_OPERATOR_VALIDATED: {
-				b += "\tgf->gds2cpp_operator_func(" + itos(_code_ptr[ip + 4]) + ")(" + _addr(_code_ptr[ip + 1]) + ", " + _addr(_code_ptr[ip + 2]) + ", " + _addr(_code_ptr[ip + 3]) + ");\n";
+				const int oidx = _code_ptr[ip + 4];
+				const String native = _native_operator(_operator_funcs_ptr[oidx], _code_ptr[ip + 1], _code_ptr[ip + 2], _code_ptr[ip + 3]);
+				if (!native.is_empty()) {
+					if (s_stats) {
+						s_stats->native_ops++;
+					}
+					b += "\t" + native + "\n";
+				} else {
+					b += "\tgf->gds2cpp_operator_func(" + itos(oidx) + ")(" + _addr(_code_ptr[ip + 1]) + ", " + _addr(_code_ptr[ip + 2]) + ", " + _addr(_code_ptr[ip + 3]) + ");\n";
+				}
 				ip += 5;
 			} break;
 			case OPCODE_TYPE_TEST_BUILTIN: {

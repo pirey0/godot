@@ -528,6 +528,9 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	if (stats.lambda_creates > 0) {
 		r += vformat("  lambda sites emitted: %d\n", stats.lambda_creates);
 	}
+	if (stats.native_ops > 0) {
+		r += vformat("  native scalar ops (inlined, no dispatch): %d\n", stats.native_ops);
+	}
 	return r;
 }
 

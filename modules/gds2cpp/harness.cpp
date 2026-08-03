@@ -60,6 +60,9 @@ static bool _resolve(Object *p_data, const StringName &p_func, GDScriptInstance 
 		return false;
 	}
 	r_gf = fns[p_func];
+	// Populate the generated classes' devirt tables (g_gf) from this script.
+	Data_gen::bind(gds.ptr());
+	OpTest_gen::bind(gds.ptr());
 	return true;
 }
 

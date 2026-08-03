@@ -33,6 +33,7 @@
 #include "core/string/ustring.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
+#include "core/templates/pair.h"
 
 // Fetch source line p_ln (1-based); empty if out of range.
 static String _src_line(const Vector<String> &p_lines, int p_ln) {
@@ -113,6 +114,8 @@ static String _addr(int p_addr) {
 static const GDScriptFunction *s_fn = nullptr; // for get_constant()
 static const HashMap<int, Variant::Type> *s_slot_types = nullptr; // stack idx -> known builtin type
 static const HashMap<int, Variant::Type> *s_member_types = nullptr; // member idx -> declared builtin type
+static const HashMap<StringName, Pair<int, String>> *s_self_methods = nullptr; // devirt-eligible self methods
+static String s_cpp_class; // owning class C++ name (for direct calls to g_gf/fn_)
 
 // Statically-known builtin Variant::Type of an operand, or NIL if unknown.
 static Variant::Type _operand_type(int p_addr) {
@@ -342,7 +345,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, bool &r_ok) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -422,6 +425,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_fn = this;
 	s_slot_types = &slot_types;
 	s_member_types = &p_member_types;
+	s_self_methods = &p_self_methods;
+	s_cpp_class = p_cpp_class;
 
 	// --- Pass 2: emit the C++ body. ---
 	String b; // body
@@ -541,6 +546,31 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					} else {
 						b += "\t" + native + "; // native " + String(get_global_name(methodname_idx)) + "\n";
 					}
+					ip += iac + 4;
+					break;
+				}
+
+				// DEVIRT: self-call to a devirt-eligible own method -> direct C++ call.
+				const bool is_self = ((base_addr >> ADDR_BITS) == ADDR_TYPE_STACK) && ((base_addr & ADDR_MASK) == ADDR_STACK_SELF);
+				const StringName mname = get_global_name(methodname_idx);
+				if (is_self && s_self_methods && s_self_methods->has(mname)) {
+					const Pair<int, String> &tgt = (*s_self_methods)[mname];
+					String ca;
+					if (argc > 0) {
+						ca = "\t\tconst Variant *ca[] = { ";
+						for (int i = 0; i < argc; i++) {
+							ca += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+						}
+						ca += " };\n";
+					}
+					const String call = s_cpp_class + "::" + tgt.second + "(inst, " + s_cpp_class + "::g_gf[" + itos(tgt.first) + "], " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ")";
+					b += "\t{\n" + ca;
+					if (ret) {
+						b += "\t\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = " + call + "; // devirt " + String(mname) + "\n";
+					} else {
+						b += "\t\t" + call + "; // devirt " + String(mname) + "\n";
+					}
+					b += "\t}\n";
 					ip += iac + 4;
 					break;
 				}
@@ -1034,6 +1064,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_fn = nullptr;
 	s_slot_types = nullptr;
 	s_member_types = nullptr;
+	s_self_methods = nullptr;
 
 	// --- Assemble the function. ---
 	String out;

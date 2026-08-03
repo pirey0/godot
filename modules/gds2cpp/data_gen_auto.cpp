@@ -36,6 +36,83 @@
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
+GDScriptFunction *Data_gen::g_gf[24] = {};
+void Data_gen::bind(GDScript *p_script) {
+	const HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();
+	if (fns.has(StringName("_init"))) {
+		g_gf[0] = fns[StringName("_init")];
+	}
+	if (fns.has(StringName("is_mission_starting"))) {
+		g_gf[1] = fns[StringName("is_mission_starting")];
+	}
+	if (fns.has(StringName("clear_all_data"))) {
+		g_gf[2] = fns[StringName("clear_all_data")];
+	}
+	if (fns.has(StringName("load_yaml_data"))) {
+		g_gf[3] = fns[StringName("load_yaml_data")];
+	}
+	if (fns.has(StringName("reset_to_default_properties"))) {
+		g_gf[4] = fns[StringName("reset_to_default_properties")];
+	}
+	if (fns.has(StringName("reset_to_default_properties_partial"))) {
+		g_gf[5] = fns[StringName("reset_to_default_properties_partial")];
+	}
+	if (fns.has(StringName("has"))) {
+		g_gf[6] = fns[StringName("has")];
+	}
+	if (fns.has(StringName("of"))) {
+		g_gf[7] = fns[StringName("of")];
+	}
+	if (fns.has(StringName("ofOr"))) {
+		g_gf[8] = fns[StringName("ofOr")];
+	}
+	if (fns.has(StringName("apply"))) {
+		g_gf[9] = fns[StringName("apply")];
+	}
+	if (fns.has(StringName("clear"))) {
+		g_gf[10] = fns[StringName("clear")];
+	}
+	if (fns.has(StringName("event"))) {
+		g_gf[11] = fns[StringName("event")];
+	}
+	if (fns.has(StringName("listen"))) {
+		g_gf[12] = fns[StringName("listen")];
+	}
+	if (fns.has(StringName("is_listening"))) {
+		g_gf[13] = fns[StringName("is_listening")];
+	}
+	if (fns.has(StringName("onListenerLeftTree"))) {
+		g_gf[14] = fns[StringName("onListenerLeftTree")];
+	}
+	if (fns.has(StringName("unlistenAll"))) {
+		g_gf[15] = fns[StringName("unlistenAll")];
+	}
+	if (fns.has(StringName("unlisten"))) {
+		g_gf[16] = fns[StringName("unlisten")];
+	}
+	if (fns.has(StringName("removeListener"))) {
+		g_gf[17] = fns[StringName("removeListener")];
+	}
+	if (fns.has(StringName("clearListeners"))) {
+		g_gf[18] = fns[StringName("clearListeners")];
+	}
+	if (fns.has(StringName("changeBy"))) {
+		g_gf[19] = fns[StringName("changeBy")];
+	}
+	if (fns.has(StringName("startCaptialized"))) {
+		g_gf[20] = fns[StringName("startCaptialized")];
+	}
+	if (fns.has(StringName("serialize"))) {
+		g_gf[21] = fns[StringName("serialize")];
+	}
+	if (fns.has(StringName("deserialize"))) {
+		g_gf[22] = fns[StringName("deserialize")];
+	}
+	if (fns.has(StringName("should_property_be_saved"))) {
+		g_gf[23] = fns[StringName("should_property_be_saved")];
+	}
+}
+
 // --- member slots ---
 static constexpr int M_missions = 0;
 static constexpr int M_upgrades = 1;
@@ -643,8 +720,7 @@ Variant Data_gen::fn_apply(GDScriptInstance *inst, GDScriptFunction *gf, const V
 		GN_is_instance_valid = 5,
 		GN_is_inside_tree = 6,
 		GN_gameDataChanged = 7,
-		GN_append = 8,
-		GN_unlistenAll = 9 }; // "warn", "typeof", "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll"
+		GN_append = 8 }; // "warn", "typeof", "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append"
 	Variant &property = s[3]; // arg
 	Variant &newValue = s[4]; // arg
 	Variant &oldValue = s[5]; // local
@@ -877,9 +953,7 @@ L286:;
 	// unlistenAll(i)
 	{
 		const Variant *ca[] = { (&t6) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_unlistenAll), ca, 1, cret, ce);
+		Data_gen::fn_unlistenAll(inst, Data_gen::g_gf[15], ca, 1); // devirt unlistenAll
 	}
 	*(&t17) = Variant();
 	goto L281;
@@ -949,8 +1023,7 @@ Variant Data_gen::fn_event(GDScriptInstance *inst, GDScriptFunction *gf, const V
 		GN_is_inside_tree = 3,
 		GN_gameDataChanged = 4,
 		GN_append = 5,
-		GN_unlistenAll = 6,
-		GN_erase = 7 }; // "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll", "erase"
+		GN_erase = 7 }; // "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "erase"
 	Variant &eventId = s[3]; // arg
 	Variant &oldValue = s[4]; // arg
 	Variant &newValue = s[5]; // arg
@@ -1109,9 +1182,7 @@ L148:;
 	// unlistenAll(i)
 	{
 		const Variant *ca[] = { (&t7) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_unlistenAll), ca, 1, cret, ce);
+		Data_gen::fn_unlistenAll(inst, Data_gen::g_gf[15], ca, 1); // devirt unlistenAll
 	}
 	*(&t11) = Variant();
 	goto L143;
@@ -1176,13 +1247,12 @@ Variant Data_gen::fn_listen(GDScriptInstance *inst, GDScriptFunction *gf, const 
 	enum { GN_has = 0,
 		GN_error = 1,
 		GN_append = 2,
-		GN_of = 3,
 		GN_gameDataChanged = 4,
 		GN_onListenerLeftTree = 5,
 		GN_tree_exiting = 6,
 		GN_is_connected = 7,
 		GN_bind = 8,
-		GN_connect = 9 }; // "has", "error", "append", "of", "gameDataChanged", "onListenerLeftTree", "tree_exiting", "is_connected", "bind", "connect"
+		GN_connect = 9 }; // "has", "error", "append", "gameDataChanged", "onListenerLeftTree", "tree_exiting", "is_connected", "bind", "connect"
 	Variant &listener = s[3]; // arg
 	Variant &property = s[4]; // arg
 	Variant &immediateCallback = s[5]; // arg
@@ -1329,10 +1399,7 @@ L151:;
 	// listener.gameDataChanged(property, null, of(property))
 	{
 		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_of), ca, 1, cret, ce);
-		*(&t11) = cret;
+		*(&t11) = Data_gen::fn_of(inst, Data_gen::g_gf[7], ca, 1); // devirt of
 	}
 	{
 		const Variant *ca[] = { (&property), gf->gds2cpp_constant_ptr(6), (&t11) };
@@ -1562,7 +1629,6 @@ Variant Data_gen::fn_unlistenAll(GDScriptInstance *inst, GDScriptFunction *gf, c
 	for (int i = 0; i < 1 && i < p_argc; i++) {
 		s[3 + i] = *p_args[i];
 	}
-	enum { GN_removeListener = 0 }; // "removeListener"
 	Variant &listener = s[3]; // arg
 	Variant &prop = s[4]; // local
 	Variant &_counter_pos = s[5]; // local
@@ -1600,9 +1666,7 @@ L17:;
 	}
 	{
 		const Variant *ca[] = { (&t7), (&listener) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_removeListener), ca, 2, cret, ce);
+		Data_gen::fn_removeListener(inst, Data_gen::g_gf[17], ca, 2); // devirt removeListener
 	}
 	*(&t8) = Variant();
 	*(&t7) = Variant();
@@ -1777,8 +1841,6 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	for (int i = 0; i < 2 && i < p_argc; i++) {
 		s[3 + i] = *p_args[i];
 	}
-	enum { GN_ofOr = 0,
-		GN_apply = 1 }; // "ofOr", "apply"
 	Variant &property = s[3]; // arg
 	Variant &change = s[4]; // arg
 	Variant &t5 = s[5]; // temp
@@ -1787,10 +1849,7 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	// return apply(property, change + ofOr(property,0))
 	{
 		const Variant *ca[] = { (&property), gf->gds2cpp_constant_ptr(0) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_ofOr), ca, 2, cret, ce);
-		*(&t7) = cret;
+		*(&t7) = Data_gen::fn_ofOr(inst, Data_gen::g_gf[8], ca, 2); // devirt ofOr
 	}
 	{
 		bool valid;
@@ -1798,10 +1857,7 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	}
 	{
 		const Variant *ca[] = { (&property), (&t6) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_apply), ca, 2, cret, ce);
-		*(&t5) = cret;
+		*(&t5) = Data_gen::fn_apply(inst, Data_gen::g_gf[9], ca, 2); // devirt apply
 	}
 	return *(&t5);
 	*(&t7) = Variant();
@@ -1881,7 +1937,6 @@ Variant Data_gen::fn_serialize(GDScriptInstance *inst, GDScriptFunction *gf, con
 	for (int i = 0; i < 0 && i < p_argc; i++) {
 		s[3 + i] = *p_args[i];
 	}
-	enum { GN_should_property_be_saved = 0 }; // "should_property_be_saved"
 	Variant &saved = s[3]; // local
 	Variant &x = s[4]; // local
 	Variant &_counter_pos = s[5]; // local
@@ -1923,10 +1978,7 @@ L28:;
 	// if should_property_be_saved(x):
 	{
 		const Variant *ca[] = { (&x) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_should_property_be_saved), ca, 1, cret, ce);
-		*(&t7) = cret;
+		*(&t7) = Data_gen::fn_should_property_be_saved(inst, Data_gen::g_gf[23], ca, 1); // devirt should_property_be_saved
 	}
 	if (!bool(*(&t7))) {
 		goto L56;

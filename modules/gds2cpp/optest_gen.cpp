@@ -36,6 +36,194 @@
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
+GDScriptFunction *OpTest_gen::g_gf[61] = {};
+void OpTest_gen::bind(GDScript *p_script) {
+	const HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();
+	if (fns.has(StringName("t_op_add"))) {
+		g_gf[0] = fns[StringName("t_op_add")];
+	}
+	if (fns.has(StringName("t_op_arith"))) {
+		g_gf[1] = fns[StringName("t_op_arith")];
+	}
+	if (fns.has(StringName("t_op_cmp"))) {
+		g_gf[2] = fns[StringName("t_op_cmp")];
+	}
+	if (fns.has(StringName("t_op_eq"))) {
+		g_gf[3] = fns[StringName("t_op_eq")];
+	}
+	if (fns.has(StringName("t_op_bit"))) {
+		g_gf[4] = fns[StringName("t_op_bit")];
+	}
+	if (fns.has(StringName("t_op_not"))) {
+		g_gf[5] = fns[StringName("t_op_not")];
+	}
+	if (fns.has(StringName("t_op_neg"))) {
+		g_gf[6] = fns[StringName("t_op_neg")];
+	}
+	if (fns.has(StringName("t_op_mod"))) {
+		g_gf[7] = fns[StringName("t_op_mod")];
+	}
+	if (fns.has(StringName("t_op_in"))) {
+		g_gf[8] = fns[StringName("t_op_in")];
+	}
+	if (fns.has(StringName("t_op_str_concat"))) {
+		g_gf[9] = fns[StringName("t_op_str_concat")];
+	}
+	if (fns.has(StringName("t_construct_vec2"))) {
+		g_gf[10] = fns[StringName("t_construct_vec2")];
+	}
+	if (fns.has(StringName("t_construct_vec3"))) {
+		g_gf[11] = fns[StringName("t_construct_vec3")];
+	}
+	if (fns.has(StringName("t_construct_color"))) {
+		g_gf[12] = fns[StringName("t_construct_color")];
+	}
+	if (fns.has(StringName("t_construct_array"))) {
+		g_gf[13] = fns[StringName("t_construct_array")];
+	}
+	if (fns.has(StringName("t_construct_dict"))) {
+		g_gf[14] = fns[StringName("t_construct_dict")];
+	}
+	if (fns.has(StringName("t_typed_array"))) {
+		g_gf[15] = fns[StringName("t_typed_array")];
+	}
+	if (fns.has(StringName("t_typed_dict"))) {
+		g_gf[16] = fns[StringName("t_typed_dict")];
+	}
+	if (fns.has(StringName("t_get_indexed"))) {
+		g_gf[17] = fns[StringName("t_get_indexed")];
+	}
+	if (fns.has(StringName("t_set_indexed"))) {
+		g_gf[18] = fns[StringName("t_set_indexed")];
+	}
+	if (fns.has(StringName("t_get_keyed"))) {
+		g_gf[19] = fns[StringName("t_get_keyed")];
+	}
+	if (fns.has(StringName("t_set_keyed"))) {
+		g_gf[20] = fns[StringName("t_set_keyed")];
+	}
+	if (fns.has(StringName("t_get_named"))) {
+		g_gf[21] = fns[StringName("t_get_named")];
+	}
+	if (fns.has(StringName("t_set_named"))) {
+		g_gf[22] = fns[StringName("t_set_named")];
+	}
+	if (fns.has(StringName("t_get_member"))) {
+		g_gf[23] = fns[StringName("t_get_member")];
+	}
+	if (fns.has(StringName("t_set_member"))) {
+		g_gf[24] = fns[StringName("t_set_member")];
+	}
+	if (fns.has(StringName("t_member_arr"))) {
+		g_gf[25] = fns[StringName("t_member_arr")];
+	}
+	if (fns.has(StringName("t_member_dict_str"))) {
+		g_gf[26] = fns[StringName("t_member_dict_str")];
+	}
+	if (fns.has(StringName("t_cast_int"))) {
+		g_gf[27] = fns[StringName("t_cast_int")];
+	}
+	if (fns.has(StringName("t_cast_float"))) {
+		g_gf[28] = fns[StringName("t_cast_float")];
+	}
+	if (fns.has(StringName("t_cast_string"))) {
+		g_gf[29] = fns[StringName("t_cast_string")];
+	}
+	if (fns.has(StringName("t_is_builtin"))) {
+		g_gf[30] = fns[StringName("t_is_builtin")];
+	}
+	if (fns.has(StringName("t_is_array"))) {
+		g_gf[31] = fns[StringName("t_is_array")];
+	}
+	if (fns.has(StringName("t_is_string"))) {
+		g_gf[32] = fns[StringName("t_is_string")];
+	}
+	if (fns.has(StringName("t_if"))) {
+		g_gf[33] = fns[StringName("t_if")];
+	}
+	if (fns.has(StringName("t_while"))) {
+		g_gf[34] = fns[StringName("t_while")];
+	}
+	if (fns.has(StringName("t_ternary"))) {
+		g_gf[35] = fns[StringName("t_ternary")];
+	}
+	if (fns.has(StringName("t_for_range"))) {
+		g_gf[36] = fns[StringName("t_for_range")];
+	}
+	if (fns.has(StringName("t_for_range3"))) {
+		g_gf[37] = fns[StringName("t_for_range3")];
+	}
+	if (fns.has(StringName("t_for_array"))) {
+		g_gf[38] = fns[StringName("t_for_array")];
+	}
+	if (fns.has(StringName("t_for_int_array"))) {
+		g_gf[39] = fns[StringName("t_for_int_array")];
+	}
+	if (fns.has(StringName("t_for_float"))) {
+		g_gf[40] = fns[StringName("t_for_float")];
+	}
+	if (fns.has(StringName("t_for_string"))) {
+		g_gf[41] = fns[StringName("t_for_string")];
+	}
+	if (fns.has(StringName("t_for_dict"))) {
+		g_gf[42] = fns[StringName("t_for_dict")];
+	}
+	if (fns.has(StringName("t_for_packed_int"))) {
+		g_gf[43] = fns[StringName("t_for_packed_int")];
+	}
+	if (fns.has(StringName("t_for_packed_str"))) {
+		g_gf[44] = fns[StringName("t_for_packed_str")];
+	}
+	if (fns.has(StringName("t_for_vec2"))) {
+		g_gf[45] = fns[StringName("t_for_vec2")];
+	}
+	if (fns.has(StringName("t_call_utility"))) {
+		g_gf[46] = fns[StringName("t_call_utility")];
+	}
+	if (fns.has(StringName("t_call_len"))) {
+		g_gf[47] = fns[StringName("t_call_len")];
+	}
+	if (fns.has(StringName("t_call_self"))) {
+		g_gf[48] = fns[StringName("t_call_self")];
+	}
+	if (fns.has(StringName("t_call_builtin_static"))) {
+		g_gf[49] = fns[StringName("t_call_builtin_static")];
+	}
+	if (fns.has(StringName("t_call_method"))) {
+		g_gf[50] = fns[StringName("t_call_method")];
+	}
+	if (fns.has(StringName("t_ret_int"))) {
+		g_gf[51] = fns[StringName("t_ret_int")];
+	}
+	if (fns.has(StringName("t_ret_array"))) {
+		g_gf[52] = fns[StringName("t_ret_array")];
+	}
+	if (fns.has(StringName("t_ret_dict"))) {
+		g_gf[53] = fns[StringName("t_ret_dict")];
+	}
+	if (fns.has(StringName("t_assert"))) {
+		g_gf[54] = fns[StringName("t_assert")];
+	}
+	if (fns.has(StringName("t_string_ops"))) {
+		g_gf[55] = fns[StringName("t_string_ops")];
+	}
+	if (fns.has(StringName("t_static_get"))) {
+		g_gf[56] = fns[StringName("t_static_get")];
+	}
+	if (fns.has(StringName("t_static_set"))) {
+		g_gf[57] = fns[StringName("t_static_set")];
+	}
+	if (fns.has(StringName("t_typed_dict2"))) {
+		g_gf[58] = fns[StringName("t_typed_dict2")];
+	}
+	if (fns.has(StringName("t_method_bind_validated"))) {
+		g_gf[59] = fns[StringName("t_method_bind_validated")];
+	}
+	if (fns.has(StringName("t_native_static"))) {
+		g_gf[60] = fns[StringName("t_native_static")];
+	}
+}
+
 // --- member slots ---
 static constexpr int M_m_int = 0;
 static constexpr int M_m_str = 1;
@@ -1771,16 +1959,12 @@ Variant OpTest_gen::fn_t_call_self(GDScriptInstance *inst, GDScriptFunction *gf,
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	enum { GN_t_op_add = 0 }; // "t_op_add"
 	Variant &a_ = s[3]; // arg
 	Variant &t4 = s[4]; // temp
 	// func t_call_self(a: int) -> int: return t_op_add(a, 1)
 	{
 		const Variant *ca[] = { (&a_), gf->gds2cpp_constant_ptr(0) };
-		Variant cret;
-		Callable::CallError ce;
-		(&s[0])->callp(gf->get_global_name(GN_t_op_add), ca, 2, cret, ce);
-		*(&t4) = cret;
+		*(&t4) = OpTest_gen::fn_t_op_add(inst, OpTest_gen::g_gf[0], ca, 2); // devirt t_op_add
 	}
 	return *(&t4);
 	return Variant();

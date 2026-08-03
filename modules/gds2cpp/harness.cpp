@@ -32,6 +32,7 @@
 
 #include "core/io/resource_loader.h"
 #include "core/os/os.h"
+#include "core/templates/pair.h"
 #include "data_gen_auto.h"
 #include "data_spec.h"
 #include "modules/gdscript/gdscript.h"
@@ -258,6 +259,47 @@ int Gds2cppHarness::uninstall_path(const String &p_path) {
 	return fns.size();
 }
 
+Dictionary Gds2cppHarness::dispatch_stats() const {
+	Dictionary d;
+	const uint64_t total = GDScriptFunction::gds2cpp_calls_total;
+	d["total"] = (int64_t)total;
+	d["cpp"] = (int64_t)GDScriptFunction::gds2cpp_calls_cpp;
+	d["interpreted"] = (int64_t)(total - GDScriptFunction::gds2cpp_calls_cpp);
+	d["no_fn"] = (int64_t)GDScriptFunction::gds2cpp_calls_no_fn;
+	d["defarg"] = (int64_t)GDScriptFunction::gds2cpp_calls_defarg;
+	d["coroutine"] = (int64_t)GDScriptFunction::gds2cpp_calls_coroutine;
+	d["cpp_pct"] = total ? (100.0 * (double)GDScriptFunction::gds2cpp_calls_cpp / (double)total) : 0.0;
+	return d;
+}
+
+void Gds2cppHarness::reset_dispatch_stats() {
+	GDScriptFunction::gds2cpp_calls_total = 0;
+	GDScriptFunction::gds2cpp_calls_cpp = 0;
+	GDScriptFunction::gds2cpp_calls_no_fn = 0;
+	GDScriptFunction::gds2cpp_calls_defarg = 0;
+	GDScriptFunction::gds2cpp_calls_coroutine = 0;
+	GDScriptFunction::gds2cpp_no_fn_names.clear();
+}
+
+Array Gds2cppHarness::top_uncovered(int p_n) const {
+	Vector<Pair<StringName, uint64_t>> v;
+	for (const KeyValue<StringName, uint64_t> &e : GDScriptFunction::gds2cpp_no_fn_names) {
+		v.push_back(Pair<StringName, uint64_t>(e.key, e.value));
+	}
+	struct ByCount {
+		bool operator()(const Pair<StringName, uint64_t> &a, const Pair<StringName, uint64_t> &b) const { return a.second > b.second; }
+	};
+	v.sort_custom<ByCount>();
+	Array out;
+	for (int i = 0; i < MIN(p_n, v.size()); i++) {
+		Array row;
+		row.push_back(String(v[i].first));
+		row.push_back((int64_t)v[i].second);
+		out.push_back(row);
+	}
+	return out;
+}
+
 void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("run", "data", "func", "args"), &Gds2cppHarness::run);
 	ClassDB::bind_method(D_METHOD("bench", "data", "func", "args", "n"), &Gds2cppHarness::bench);
@@ -268,4 +310,7 @@ void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_enabled"), &Gds2cppHarness::is_enabled);
 	ClassDB::bind_method(D_METHOD("bind_all"), &Gds2cppHarness::bind_all);
 	ClassDB::bind_method(D_METHOD("uninstall_path", "path"), &Gds2cppHarness::uninstall_path);
+	ClassDB::bind_method(D_METHOD("dispatch_stats"), &Gds2cppHarness::dispatch_stats);
+	ClassDB::bind_method(D_METHOD("reset_dispatch_stats"), &Gds2cppHarness::reset_dispatch_stats);
+	ClassDB::bind_method(D_METHOD("top_uncovered", "n"), &Gds2cppHarness::top_uncovered);
 }

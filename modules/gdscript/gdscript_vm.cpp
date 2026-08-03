@@ -33,6 +33,7 @@
 #include "gdscript_lambda_callable.h"
 
 #include "core/os/os.h"
+#include "core/os/thread.h"
 #include "core/profiling/profiling.h"
 
 #ifdef DEBUG_ENABLED
@@ -502,6 +503,24 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 	// else falls through to the interpreter below. One script zone wraps the whole call,
 	// colored green for the C++ path / blue for the interpreter, so times compare directly.
 	const bool gds2cpp_go = gds2cpp_enabled && _gds2cpp_fn != nullptr && p_state == nullptr && p_argcount == _argument_count;
+	if (gds2cpp_enabled) {
+		// Coverage tally: why each call did / didn't route to C++.
+		gds2cpp_calls_total++;
+		if (gds2cpp_go) {
+			gds2cpp_calls_cpp++;
+		} else if (_gds2cpp_fn == nullptr) {
+			gds2cpp_calls_no_fn++;
+			// HashMap isn't thread-safe; pvkk runs scripts on preload worker threads.
+			// Only the main thread writes the name histogram (still representative).
+			if (Thread::is_main_thread()) {
+				gds2cpp_no_fn_names[name]++;
+			}
+		} else if (p_state != nullptr) {
+			gds2cpp_calls_coroutine++;
+		} else {
+			gds2cpp_calls_defarg++; // transpiled + not coroutine -> it's the arg-count guard
+		}
+	}
 	GodotProfileZoneScriptMaybeCpp(gds2cpp_go, _gds2cpp_fn, this, source, name, name, _initial_line);
 
 	OPCODES_TABLE;

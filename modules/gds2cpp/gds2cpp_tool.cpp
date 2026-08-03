@@ -182,6 +182,7 @@ static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> _no_r
 struct OkFn {
 	String orig, cpp;
 	GDScriptFunction *fn;
+	int implicit = 0; // 0 = member function; 1 = @implicit_new; 2 = @implicit_ready
 };
 
 // Pass A: which functions transpile + assign deterministic unique C++ names.
@@ -202,6 +203,28 @@ static Vector<OkFn> _pass_a(const Ref<GDScript> &gds, const String &cls) {
 		if (okv) {
 			taken_fn.insert(cpp_name);
 			ok.push_back(OkFn{ String(E.key), cpp_name, E.value });
+		}
+	}
+	// @implicit_new / @implicit_ready are stored outside member_functions (they run on
+	// every .new()/_ready) -- transpile + bind them too.
+	struct Impl {
+		const GDScriptFunction *fn;
+		const char *orig;
+		const char *cpp;
+		int kind;
+	};
+	Impl impls[2] = {
+		{ gds->get_implicit_initializer(), "@implicit_new", "fn__implicit_new", 1 },
+		{ gds->get_implicit_ready(), "@implicit_ready", "fn__implicit_ready", 2 },
+	};
+	for (const Impl &im : impls) {
+		if (im.fn == nullptr) {
+			continue;
+		}
+		bool okv = false;
+		im.fn->transpile_to_cpp(cls, im.cpp, src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), okv);
+		if (okv) {
+			ok.push_back(OkFn{ im.orig, im.cpp, const_cast<GDScriptFunction *>(im.fn), im.kind });
 		}
 	}
 	return ok;
@@ -283,8 +306,14 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 		// Fill the g_gf devirt table AND install the transpiled body on the live
 		// GDScriptFunction so GDScriptFunction::call() can dispatch to it directly.
 		const String slot = ok[i].cpp.substr(3);
-		const String key = "StringName(\"" + ok[i].orig + "\")";
-		c += "\tif (fns.has(" + key + ")) { GDScriptFunction *gf = fns[" + key + "]; GF(" + slot + ") = gf; gf->gds2cpp_set_fn(&" + cls + "::" + ok[i].cpp + "); }\n";
+		if (ok[i].implicit != 0) {
+			// @implicit_new / @implicit_ready live outside member_functions.
+			const String getter = ok[i].implicit == 1 ? "get_implicit_initializer()" : "get_implicit_ready()";
+			c += "\tif (p_script->" + getter + ") { GDScriptFunction *gf = const_cast<GDScriptFunction *>(p_script->" + getter + "); GF(" + slot + ") = gf; gf->gds2cpp_set_fn(&" + cls + "::" + ok[i].cpp + "); }\n";
+		} else {
+			const String key = "StringName(\"" + ok[i].orig + "\")";
+			c += "\tif (fns.has(" + key + ")) { GDScriptFunction *gf = fns[" + key + "]; GF(" + slot + ") = gf; gf->gds2cpp_set_fn(&" + cls + "::" + ok[i].cpp + "); }\n";
+		}
 	}
 	c += "}\n\n";
 	c += member_block;

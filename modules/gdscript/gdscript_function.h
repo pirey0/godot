@@ -636,6 +636,13 @@ public:
 	// bind() (generated) installs _gds2cpp_fn; call() routes to it when gds2cpp_enabled.
 	typedef Variant (*Gds2cppFn)(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
 	static bool gds2cpp_enabled; // global on/off toggle for transpiled dispatch
+	// Dynamic dispatch coverage counters (tallied only while enabled).
+	static uint64_t gds2cpp_calls_total; // GDScript call()s seen while enabled
+	static uint64_t gds2cpp_calls_cpp; // routed to transpiled C++
+	static uint64_t gds2cpp_calls_no_fn; // not transpiled/installed -> interpreted
+	static uint64_t gds2cpp_calls_defarg; // transpiled but called with default args -> interpreted
+	static uint64_t gds2cpp_calls_coroutine; // coroutine resume/await -> interpreted
+	static HashMap<StringName, uint64_t> gds2cpp_no_fn_names; // hot uncovered fn names -> call count
 	Gds2cppFn _gds2cpp_fn = nullptr; // transpiled body, or null if this fn isn't transpiled
 	_FORCE_INLINE_ void gds2cpp_set_fn(Gds2cppFn p_fn) { _gds2cpp_fn = p_fn; }
 	// gds2cpp: typed temporary stack slots the VM pre-initializes at entry so validated

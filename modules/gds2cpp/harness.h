@@ -71,4 +71,11 @@ public:
 	// Debug/bisect: revert the script at p_path to interpreted (clear _gds2cpp_fn on all
 	// its functions). Returns the number of functions reverted.
 	int uninstall_path(const String &p_path);
+
+	// Dynamic dispatch coverage since the last reset: {total, cpp, interpreted, no_fn,
+	// defarg, coroutine, cpp_pct}. Counts GDScript call()s while dispatch is enabled.
+	Dictionary dispatch_stats() const;
+	void reset_dispatch_stats();
+	// Top interpreted-because-not-transpiled function names by call count: [[name, count], ...].
+	Array top_uncovered(int p_n) const;
 };

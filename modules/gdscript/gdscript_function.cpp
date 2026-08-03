@@ -105,6 +105,12 @@ void GDScriptFunction::debug_get_stack_member_state(int p_line, List<Pair<String
 }
 
 bool GDScriptFunction::gds2cpp_enabled = false; // off by default; flip via Gds2cppTool.set_enabled(true)
+uint64_t GDScriptFunction::gds2cpp_calls_total = 0;
+uint64_t GDScriptFunction::gds2cpp_calls_cpp = 0;
+uint64_t GDScriptFunction::gds2cpp_calls_no_fn = 0;
+uint64_t GDScriptFunction::gds2cpp_calls_defarg = 0;
+uint64_t GDScriptFunction::gds2cpp_calls_coroutine = 0;
+HashMap<StringName, uint64_t> GDScriptFunction::gds2cpp_no_fn_names;
 
 GDScriptFunction::GDScriptFunction() {
 	name = "<anonymous>";

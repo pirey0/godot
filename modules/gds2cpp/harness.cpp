@@ -37,6 +37,12 @@
 #include "modules/gdscript/gdscript_function.h"
 #include "optest_gen.h"
 
+// Whole-program registry, present only once transpile_program has generated wp/.
+#if defined(__has_include) && __has_include("wp/gds2cpp_all.h")
+#include "wp/gds2cpp_all.h"
+#define GDS2CPP_HAS_WP 1
+#endif
+
 // Try each generated translation unit's lookup (same Fn signature).
 static Data_gen::Fn _find_fn(const StringName &n) {
 	if (Data_gen::Fn f = Data_gen::lookup(n)) {
@@ -230,6 +236,15 @@ bool Gds2cppHarness::is_enabled() const {
 	return GDScriptFunction::gds2cpp_enabled;
 }
 
+int Gds2cppHarness::bind_all() {
+#ifdef GDS2CPP_HAS_WP
+	gds2cpp_bind_all();
+	return 1;
+#else
+	return 0;
+#endif
+}
+
 void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("run", "data", "func", "args"), &Gds2cppHarness::run);
 	ClassDB::bind_method(D_METHOD("bench", "data", "func", "args", "n"), &Gds2cppHarness::bench);
@@ -238,4 +253,5 @@ void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("install", "obj"), &Gds2cppHarness::install);
 	ClassDB::bind_method(D_METHOD("set_enabled", "on"), &Gds2cppHarness::set_enabled);
 	ClassDB::bind_method(D_METHOD("is_enabled"), &Gds2cppHarness::is_enabled);
+	ClassDB::bind_method(D_METHOD("bind_all"), &Gds2cppHarness::bind_all);
 }

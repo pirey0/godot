@@ -62,4 +62,9 @@ public:
 	// installed transpiled body to the C++ version instead of the interpreter.
 	void set_enabled(bool p_on);
 	bool is_enabled() const;
+
+	// Whole-program: install transpiled bodies for EVERY script in the compiled-in
+	// wp/ set (gds2cpp_bind_all loads each by path and binds). Returns 1 if the
+	// whole-program output was compiled in, 0 otherwise. Call once after scripts load.
+	int bind_all();
 };

@@ -44,6 +44,22 @@ static String _src_line(const Vector<String> &p_lines, int p_ln) {
 	return (p_ln >= 1 && p_ln <= p_lines.size()) ? p_lines[p_ln - 1] : String();
 }
 
+// Make a GDScript source line safe to emit as a `// ...` comment: a trailing backslash
+// (GDScript line continuation) would turn the comment into a C++ line-continuation and
+// swallow the following code line, so strip any trailing backslashes/whitespace.
+static String _comment_safe(const String &p_s) {
+	String s = p_s;
+	while (s.length() > 0) {
+		const char32_t c = s[s.length() - 1];
+		if (c == '\\' || c == ' ' || c == '\t') {
+			s = s.substr(0, s.length() - 1);
+		} else {
+			break;
+		}
+	}
+	return s;
+}
+
 // --- Naming context (single-threaded dev tool: set per transpile_to_cpp call). ---
 // _addr() and _gname() consult these to emit readable names instead of raw indices.
 static const HashMap<int, String> *s_member_names = nullptr; // member idx -> "M_values"
@@ -706,7 +722,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			} break;
 			case OPCODE_LINE: {
 				// Interleave the matching GDScript source line as a comment.
-				String t = _src_line(p_source_lines, _code_ptr[ip + 1]).strip_edges();
+				String t = _comment_safe(_src_line(p_source_lines, _code_ptr[ip + 1]).strip_edges());
 				if (!t.is_empty()) {
 					b += "\t// " + t + "\n";
 				}
@@ -1408,7 +1424,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 		}
 		out += "// " + String("-").repeat(76) + "\n";
 		for (int l = decl_line; l <= max_line; l++) {
-			out += "// " + _src_line(p_source_lines, l) + "\n";
+			out += "// " + _comment_safe(_src_line(p_source_lines, l)) + "\n";
 		}
 		out += "// " + String("-").repeat(76) + "\n";
 	}

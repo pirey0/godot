@@ -220,7 +220,7 @@ static Vector<OkFn> _pass_a(const Ref<GDScript> &gds, const String &cls) {
 	return ok;
 }
 
-static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr) {
+static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr) {
 	const String p_path = gds->get_path();
 	const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &resolver = p_resolver ? *p_resolver : _no_resolver;
 	Vector<String> src_lines = _load_source_lines(p_path);
@@ -245,7 +245,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	String bodies;
 	for (int i = 0; i < ok.size(); i++) {
 		bool okv = false;
-		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats) + "\n";
+		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets) + "\n";
 	}
 
 	const int N = MAX(ok.size(), 1);
@@ -377,6 +377,8 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	// (class -> method -> direct C++ target), needed before any cross-class emit.
 	HashMap<const GDScript *, HashSet<StringName>> eligible_of;
 	HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> resolver;
+	// Unfiltered variant (includes overridden methods) for resolving super.method() targets.
+	HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> super_targets;
 	for (const Cls &c : classes) {
 		HashSet<StringName> eligible;
 		for (const KeyValue<StringName, GDScriptFunction *> &E : c.gds->get_member_functions()) {
@@ -407,8 +409,10 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		eligible_of[c.gds.ptr()] = eligible;
 		Vector<OkFn> ok = _pass_a(c.gds, c.cpp);
 		for (int i = 0; i < ok.size(); i++) {
-			if (eligible.has(StringName(ok[i].orig))) {
-				resolver[c.gds.ptr()][StringName(ok[i].orig)] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
+			const StringName key = StringName(ok[i].orig);
+			super_targets[c.gds.ptr()][key] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
+			if (eligible.has(key)) {
+				resolver[c.gds.ptr()][key] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
 			}
 		}
 	}
@@ -416,7 +420,7 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	// EMIT with cross-class direct calls resolved against the whole program.
 	String includes, bind_body;
 	for (const Cls &c : classes) {
-		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver);
+		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver, &super_targets);
 		includes += "#include \"" + c.cpp + ".h\"\n";
 		bind_body += "\t{ Ref<GDScript> g = ResourceLoader::load(\"" + c.path + "\"); if (g.is_valid()) " + c.cpp + "::bind(g.ptr()); }\n";
 	}
@@ -445,6 +449,11 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	r += vformat("  devirt (self-call -> direct C++):    %d (%.1f%%)\n", stats.devirt_calls, byname ? 100.0 * stats.devirt_calls / byname : 0.0);
 	r += vformat("  cross-class (typed recv -> direct):  %d (%.1f%%)\n", stats.cross_calls, byname ? 100.0 * stats.cross_calls / byname : 0.0);
 	r += vformat("  dynamic (callp fallback):            %d (%.1f%%)\n", stats.dynamic_calls, byname ? 100.0 * stats.dynamic_calls / byname : 0.0);
+	const int super_total = stats.super_calls + stats.super_dynamic_calls;
+	if (super_total > 0) {
+		r += vformat("  super (direct parent C++):           %d of %d super-calls (%.1f%%); %d runtime-walk (native/untranspiled parent)\n",
+				stats.super_calls, super_total, super_total ? 100.0 * stats.super_calls / super_total : 0.0, stats.super_dynamic_calls);
+	}
 	const int specialized = stats.native_calls + stats.devirt_calls + stats.cross_calls + stats.validated_calls;
 	r += vformat("  => %.1f%% of all call sites go through pure C++ (native+devirt+cross+validated)\n",
 			all_calls ? 100.0 * specialized / all_calls : 0.0);

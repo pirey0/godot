@@ -147,6 +147,10 @@ static Gds2cppStats *s_stats = nullptr; // optional per-call-site outcome tally
 static HashMap<int, const GDScript *> s_slot_classes; // stack idx -> GDScript class (from arg types)
 static const HashMap<int, const GDScript *> *s_member_classes = nullptr; // member idx -> class
 static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_resolver = nullptr;
+// Like s_resolver but UNFILTERED (includes overridden methods): super.method() targets a
+// specific parent implementation, which is always overridden by the caller, so it's absent
+// from s_resolver by construction.
+static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_super_targets = nullptr;
 static const HashMap<int, const GDScript *> *s_live_classes = nullptr; // live local slot -> class (per point)
 
 // GDScript class held by an operand (STACK arg/local or MEMBER), or nullptr if unknown.
@@ -446,6 +450,7 @@ static int _instr_size(const int *p_code, int p_ip) {
 			return 7 + (int)(sizeof(Variant::ValidatedOperatorEvaluator) / sizeof(int));
 		case GDScriptFunction::OPCODE_CALL:
 		case GDScriptFunction::OPCODE_CALL_RETURN:
+		case GDScriptFunction::OPCODE_CALL_SELF_BASE:
 			return p_code[p_ip + 1] + 4;
 		case GDScriptFunction::OPCODE_CALL_BUILTIN_TYPE_VALIDATED:
 		case GDScriptFunction::OPCODE_CALL_UTILITY:
@@ -500,7 +505,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -587,6 +592,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_stats = r_stats;
 	s_member_classes = &p_member_classes;
 	s_resolver = &p_resolver;
+	s_super_targets = p_super_targets;
 	// Receiver classes for typed GDScript arguments (slot 3+i).
 	s_slot_classes.clear();
 	for (int i = 0; i < _argument_count && i < argument_types.size(); i++) {
@@ -882,6 +888,68 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					b += "\t\t*" + _addr(target_addr) + " = cret;\n";
 				}
 				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CALL_SELF_BASE: {
+				// super.method(args): the parent implementation is statically known, so resolve
+				// the defining base class + method at TRANSPILE time and emit a direct C++ call
+				// (self is unchanged -> pass inst), exactly like the cross-class path. Only a
+				// native-base or not-transpiled parent falls back to a VM-faithful runtime walk.
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + iac + 2];
+				const int methodname_idx = _code_ptr[ip + iac + 3];
+				const int dst_addr = _code_ptr[ip + 2 + argc];
+				const StringName mname = get_global_name(methodname_idx);
+
+				// Walk the base chain now: first base GDScript defining mname is the target.
+				const Gds2cppTarget *tgt = nullptr;
+				if (s_super_targets) {
+					const GDScript *bc = get_script();
+					while (bc && bc->get_base().ptr()) {
+						bc = bc->get_base().ptr();
+						if (bc->get_member_functions().has(mname)) {
+							if (s_super_targets->has(bc)) {
+								const HashMap<StringName, Gds2cppTarget> &tm = (*s_super_targets)[bc];
+								if (tm.has(mname)) {
+									tgt = &tm[mname];
+								}
+							}
+							break; // defining class found; if not transpiled, tgt stays null -> fallback
+						}
+					}
+				}
+
+				String ca;
+				if (argc > 0) {
+					ca = "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						ca += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					ca += " };\n";
+				}
+				const String args = argc > 0 ? "ca" : "nullptr";
+				const String dst = _addr(dst_addr);
+
+				if (tgt) {
+					if (s_stats) {
+						s_stats->super_calls++;
+					}
+					const String call = tgt->class_cpp + "::" + tgt->fn_cpp + "(inst, " + tgt->class_cpp + "::g_gf[" + itos(tgt->gf_index) + "], " + args + ", " + itos(argc) + ")";
+					b += "\t{\n" + ca;
+					b += "\t\t*" + dst + " = " + call + "; // super " + String(mname) + "\n";
+					b += "\t}\n";
+				} else {
+					if (s_stats) {
+						s_stats->super_dynamic_calls++;
+					}
+					b += "\t{\n" + ca;
+					b += "\t\tconst StringName _m = " + _gname(methodname_idx) + "; Callable::CallError _ce;\n";
+					b += "\t\tconst GDScript *_b = gf->get_script(); GDScriptFunction *_sf = nullptr;\n";
+					b += "\t\twhile (_b->get_base().ptr()) { _b = _b->get_base().ptr(); HashMap<StringName, GDScriptFunction *>::ConstIterator _e = _b->get_member_functions().find(_m); if (_e) { _sf = _e->value; break; } }\n";
+					b += "\t\tif (_sf) { *" + dst + " = _sf->call(inst, " + args + ", " + itos(argc) + ", _ce); }\n";
+					b += "\t\telse if (_b->get_native().ptr() && _m != StringName(\"_init\")) { MethodBind *_mb = ClassDB::get_method(_b->get_native()->get_name(), _m); if (_mb && inst) { *" + dst + " = _mb->call(inst->get_owner(), " + args + ", " + itos(argc) + ", _ce); } }\n";
+					b += "\t}\n";
+				}
 				ip += iac + 4;
 			} break;
 			case OPCODE_OPERATOR: {
@@ -1417,6 +1485,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_stats = nullptr;
 	s_member_classes = nullptr;
 	s_resolver = nullptr;
+	s_super_targets = nullptr;
 	s_live_classes = nullptr;
 	s_slot_classes.clear();
 

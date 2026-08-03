@@ -267,6 +267,8 @@ struct Gds2cppStats {
 	int cross_calls = 0; // typed-receiver call routed to another class's direct C++ fn
 	int dynamic_calls = 0; // by-name callp fallback (type/target unknown)
 	int validated_calls = 0; // CALL_BUILTIN_TYPE_VALIDATED (already type-resolved by GDScript)
+	int super_calls = 0; // super.method() routed to a direct C++ call on the parent
+	int super_dynamic_calls = 0; // super.method() left as a runtime base-chain walk (native/untranspiled parent)
 };
 
 class GDScript;
@@ -668,7 +670,7 @@ public:
 	//   self-calls (routed to a direct C++ call instead of dynamic callp). May be empty.
 	// p_member_classes: member index -> GDScript class it holds (for cross-class devirt).
 	// p_resolver: GDScript class -> {method -> target} for devirt-eligible transpilable methods.
-	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats = nullptr) const;
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr) const;
 
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;

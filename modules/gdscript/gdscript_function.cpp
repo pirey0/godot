@@ -105,6 +105,20 @@ void GDScriptFunction::debug_get_stack_member_state(int p_line, List<Pair<String
 }
 
 bool GDScriptFunction::gds2cpp_enabled = false; // off by default; flip via Gds2cppTool.set_enabled(true)
+// gds2cpp verify/diagnostic mode -- free globals (not GDScriptFunction static members) so touching
+// them doesn't churn gdscript_function.h and force a whole-program wp recompile.
+bool g_gds2cpp_verify = false;
+uint64_t g_gds2cpp_verify_crashes = 0;
+HashMap<StringName, uint64_t> g_gds2cpp_verify_crash_names;
+// Breadcrumb: the most recently dispatched transpiled fn (verify mode only). Transpiled
+// bodies push no GDScript stack frame, so get_stack() misattributes errors -- this lets a
+// failing assert name the real C++ function. Pointers into live GDScriptFunction members.
+const StringName *g_gds2cpp_last_source = nullptr;
+const StringName *g_gds2cpp_last_name = nullptr;
+// Ring buffer of the last 8 dispatched transpiled fns (verify mode), oldest->newest by (pos-8..pos).
+const StringName *g_gds2cpp_ring_source[8] = {};
+const StringName *g_gds2cpp_ring_name[8] = {};
+uint32_t g_gds2cpp_ring_pos = 0;
 uint64_t GDScriptFunction::gds2cpp_calls_total = 0;
 uint64_t GDScriptFunction::gds2cpp_calls_cpp = 0;
 uint64_t GDScriptFunction::gds2cpp_calls_no_fn = 0;

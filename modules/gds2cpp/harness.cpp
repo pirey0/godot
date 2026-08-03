@@ -238,6 +238,48 @@ bool Gds2cppHarness::is_enabled() const {
 	return GDScriptFunction::gds2cpp_enabled;
 }
 
+extern bool g_gds2cpp_verify;
+extern uint64_t g_gds2cpp_verify_crashes;
+extern HashMap<StringName, uint64_t> g_gds2cpp_verify_crash_names;
+extern const StringName *g_gds2cpp_last_source;
+extern const StringName *g_gds2cpp_last_name;
+
+String Gds2cppHarness::last_cpp_fn() const {
+	String s = g_gds2cpp_last_source ? String(*g_gds2cpp_last_source) : String("<none>");
+	String n = g_gds2cpp_last_name ? String(*g_gds2cpp_last_name) : String("<none>");
+	return s + " :: " + n;
+}
+
+void Gds2cppHarness::set_verify(bool p_on) {
+	g_gds2cpp_verify = p_on;
+}
+
+bool Gds2cppHarness::is_verify() const {
+	return g_gds2cpp_verify;
+}
+
+Dictionary Gds2cppHarness::verify_report() const {
+	Dictionary d;
+	d["crashes"] = (int64_t)g_gds2cpp_verify_crashes;
+	Vector<Pair<StringName, uint64_t>> v;
+	for (const KeyValue<StringName, uint64_t> &e : g_gds2cpp_verify_crash_names) {
+		v.push_back(Pair<StringName, uint64_t>(e.key, e.value));
+	}
+	struct ByCount {
+		bool operator()(const Pair<StringName, uint64_t> &a, const Pair<StringName, uint64_t> &b) const { return a.second > b.second; }
+	};
+	v.sort_custom<ByCount>();
+	Array fns;
+	for (int i = 0; i < v.size(); i++) {
+		Array row;
+		row.push_back(String(v[i].first));
+		row.push_back((int64_t)v[i].second);
+		fns.push_back(row);
+	}
+	d["functions"] = fns;
+	return d;
+}
+
 int Gds2cppHarness::bind_all() {
 #ifdef GDS2CPP_HAS_WP
 	gds2cpp_bind_all();
@@ -308,6 +350,10 @@ void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("install", "obj"), &Gds2cppHarness::install);
 	ClassDB::bind_method(D_METHOD("set_enabled", "on"), &Gds2cppHarness::set_enabled);
 	ClassDB::bind_method(D_METHOD("is_enabled"), &Gds2cppHarness::is_enabled);
+	ClassDB::bind_method(D_METHOD("set_verify", "on"), &Gds2cppHarness::set_verify);
+	ClassDB::bind_method(D_METHOD("is_verify"), &Gds2cppHarness::is_verify);
+	ClassDB::bind_method(D_METHOD("verify_report"), &Gds2cppHarness::verify_report);
+	ClassDB::bind_method(D_METHOD("last_cpp_fn"), &Gds2cppHarness::last_cpp_fn);
 	ClassDB::bind_method(D_METHOD("bind_all"), &Gds2cppHarness::bind_all);
 	ClassDB::bind_method(D_METHOD("uninstall_path", "path"), &Gds2cppHarness::uninstall_path);
 	ClassDB::bind_method(D_METHOD("dispatch_stats"), &Gds2cppHarness::dispatch_stats);

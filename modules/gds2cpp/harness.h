@@ -62,6 +62,16 @@ public:
 	// installed transpiled body to the C++ version instead of the interpreter.
 	void set_enabled(bool p_on);
 	bool is_enabled() const;
+	// Verify/diagnostic mode: SEH-guard every transpiled body so a crash is caught, logged,
+	// that fn reverted to interpreted, and execution continues -- one run enumerates every
+	// crashing transpiled fn instead of dying on the first. Windows/MSVC only.
+	void set_verify(bool p_on);
+	bool is_verify() const;
+	// {crashes: total_faults, functions: [[Class::fn, count], ...]} since process start.
+	Dictionary verify_report() const;
+	// The most recently dispatched transpiled function ("source :: name"), for pinning
+	// which C++ body was running when an error/assert fired (get_stack() can't see it).
+	String last_cpp_fn() const;
 
 	// Whole-program: install transpiled bodies for EVERY script in the compiled-in
 	// wp/ set (gds2cpp_bind_all loads each by path and binds). Returns 1 if the

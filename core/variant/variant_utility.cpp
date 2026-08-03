@@ -1015,13 +1015,32 @@ void VariantUtilityFunctions::printraw(const Variant **p_args, int p_arg_count, 
 	r_error.error = Callable::CallError::CALL_OK;
 }
 
+// gds2cpp verify breadcrumb (defined in the gdscript module; linked into the same binary).
+extern bool g_gds2cpp_verify;
+extern const StringName *g_gds2cpp_last_source;
+extern const StringName *g_gds2cpp_last_name;
+extern const StringName *g_gds2cpp_ring_source[8];
+extern const StringName *g_gds2cpp_ring_name[8];
+extern uint32_t g_gds2cpp_ring_pos;
+
 void VariantUtilityFunctions::push_error(const Variant **p_args, int p_arg_count, Callable::CallError &r_error) {
 	if (p_arg_count < 1) {
 		r_error.error = Callable::CallError::CALL_ERROR_TOO_FEW_ARGUMENTS;
 		r_error.expected = 1;
 	}
 
-	ERR_PRINT(join_string(p_args, p_arg_count));
+	String _msg = join_string(p_args, p_arg_count);
+	if (g_gds2cpp_verify) {
+		_msg += " [gds2cpp C++ trail (old->new):";
+		for (uint32_t i = 0; i < 8; i++) {
+			uint32_t idx = (g_gds2cpp_ring_pos + i) & 7; // oldest first
+			if (g_gds2cpp_ring_name[idx]) {
+				_msg += " " + String(*g_gds2cpp_ring_name[idx]);
+			}
+		}
+		_msg += "]";
+	}
+	ERR_PRINT(_msg);
 	r_error.error = Callable::CallError::CALL_OK;
 }
 

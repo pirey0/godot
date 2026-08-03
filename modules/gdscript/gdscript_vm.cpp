@@ -36,6 +36,35 @@
 #include "core/os/thread.h"
 #include "core/profiling/profiling.h"
 
+#include <cstdio>
+#include <cstdlib>
+
+// gds2cpp verify-mode globals (defined in gdscript_function.cpp).
+extern bool g_gds2cpp_verify;
+extern uint64_t g_gds2cpp_verify_crashes;
+extern HashMap<StringName, uint64_t> g_gds2cpp_verify_crash_names;
+extern const StringName *g_gds2cpp_last_source;
+extern const StringName *g_gds2cpp_last_name;
+extern const StringName *g_gds2cpp_ring_source[8];
+extern const StringName *g_gds2cpp_ring_name[8];
+extern uint32_t g_gds2cpp_ring_pos;
+
+#if defined(_MSC_VER)
+// gds2cpp verify mode: run a transpiled body under Windows structured exception handling so an access violation
+// is caught instead of killing the process. Kept in its own leaf function with no
+// unwinding-requiring locals of the caller. Returns true if the body ran; on false the
+// body faulted and *r_ret is untouched. The __except filter is EXCEPTION_EXECUTE_HANDLER (1),
+// written literally so no extra system header is needed.
+static bool _gds2cpp_guarded_call(GDScriptFunction::Gds2cppFn p_fn, GDScriptInstance *p_inst, GDScriptFunction *p_gf, const Variant **p_args, int p_argc, Variant *r_ret) {
+	__try {
+		*r_ret = p_fn(p_inst, p_gf, p_args, p_argc);
+		return true;
+	} __except (1) {
+		return false;
+	}
+}
+#endif
+
 #ifdef DEBUG_ENABLED
 
 static bool _profile_count_as_native(const Object *p_base_obj, const StringName &p_methodname) {
@@ -532,7 +561,31 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 	r_err.error = Callable::CallError::CALL_OK;
 
 	if (gds2cpp_go) {
-		return _gds2cpp_fn(p_instance, this, p_args, p_argcount);
+#if defined(_MSC_VER)
+		if (unlikely(g_gds2cpp_verify)) {
+			g_gds2cpp_last_source = &source;
+			g_gds2cpp_last_name = &name;
+			g_gds2cpp_ring_source[g_gds2cpp_ring_pos & 7] = &source;
+			g_gds2cpp_ring_name[g_gds2cpp_ring_pos & 7] = &name;
+			g_gds2cpp_ring_pos++;
+			Variant _vret;
+			if (_gds2cpp_guarded_call(_gds2cpp_fn, p_instance, this, p_args, p_argcount, &_vret)) {
+				return _vret;
+			}
+			// The transpiled body faulted. Log it, disable C++ for this fn so we don't
+			// fault again, and fall through to the interpreter for this call.
+			g_gds2cpp_verify_crashes++;
+			if (Thread::is_main_thread()) {
+				g_gds2cpp_verify_crash_names[StringName(String(source) + "::" + String(name))]++;
+			}
+			fprintf(stderr, "GDS2CPP_CRASH %s :: %s\n", String(source).utf8().get_data(), String(name).utf8().get_data());
+			fflush(stderr);
+			_gds2cpp_fn = nullptr;
+		} else
+#endif
+		{
+			return _gds2cpp_fn(p_instance, this, p_args, p_argcount);
+		}
 	}
 
 	static thread_local int call_depth = 0;
@@ -3907,6 +3960,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 						err_text = "Assertion failed.";
 					} else {
 						err_text = "Assertion failed: " + message_str;
+					}
+					if (g_gds2cpp_verify && g_gds2cpp_last_name) {
+						err_text += " [gds2cpp last C++ fn: " + (g_gds2cpp_last_source ? String(*g_gds2cpp_last_source) : String()) + "::" + String(*g_gds2cpp_last_name) + "]";
 					}
 					OPCODE_BREAK;
 				}

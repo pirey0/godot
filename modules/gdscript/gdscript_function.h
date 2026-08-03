@@ -617,6 +617,10 @@ public:
 	// gds2cpp: typed temporary stack slots the VM pre-initializes at entry so validated
 	// calls can write into correctly-typed destinations. Transpiled code must do the same.
 	_FORCE_INLINE_ const HashMap<int, Variant::Type> &gds2cpp_temporary_slots() const { return temporary_slots; }
+	// gds2cpp: statically-declared builtin type of argument p_i (Variant::NIL if untyped/non-builtin).
+	_FORCE_INLINE_ Variant::Type gds2cpp_arg_builtin_type(int p_i) const {
+		return (p_i >= 0 && p_i < argument_types.size() && argument_types[p_i].kind == GDScriptDataType::BUILTIN) ? argument_types[p_i].builtin_type : Variant::NIL;
+	}
 	// gds2cpp: map stack slot -> source identifier (arg/local) for readable names.
 	// Only slots owned by a single identifier for the whole function are returned;
 	// slots reused by differently-named locals are omitted (left as temporaries).
@@ -628,7 +632,8 @@ public:
 	// p_source_lines: the .gd file split into lines (1-based via index-1) so the
 	// emitter can interleave the matching GDScript as comments. May be empty.
 	// p_member_names: member index -> C++ name constant (e.g. 15 -> "M_values").
-	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, bool &r_ok) const;
+	// p_member_types: member index -> declared builtin Variant::Type (for native specialization).
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, bool &r_ok) const;
 
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;

@@ -109,6 +109,85 @@ static String _addr(int p_addr) {
 	return "((Variant *)nullptr)";
 }
 
+// --- Type context (set per transpile_to_cpp call) for native specialization. ---
+static const GDScriptFunction *s_fn = nullptr; // for get_constant()
+static const HashMap<int, Variant::Type> *s_slot_types = nullptr; // stack idx -> known builtin type
+static const HashMap<int, Variant::Type> *s_member_types = nullptr; // member idx -> declared builtin type
+
+// Statically-known builtin Variant::Type of an operand, or NIL if unknown.
+static Variant::Type _operand_type(int p_addr) {
+	const int idx = p_addr & GDScriptFunction::ADDR_MASK;
+	switch (p_addr >> GDScriptFunction::ADDR_BITS) {
+		case GDScriptFunction::ADDR_TYPE_STACK:
+			return (s_slot_types && s_slot_types->has(idx)) ? (*s_slot_types)[idx] : Variant::NIL;
+		case GDScriptFunction::ADDR_TYPE_CONSTANT:
+			return s_fn ? s_fn->get_constant(idx).get_type() : Variant::NIL;
+		case GDScriptFunction::ADDR_TYPE_MEMBER:
+			return (s_member_types && s_member_types->has(idx)) ? (*s_member_types)[idx] : Variant::NIL;
+	}
+	return Variant::NIL;
+}
+
+// Native C++ expression for a value-returning builtin method on a known-type base,
+// or "" if not in the curated set (caller then falls back to dynamic dispatch).
+// p_base / p_args are `Variant *` expressions; the result is assignable to a Variant.
+static String _native_builtin_expr(Variant::Type p_type, const String &p_method, int p_argc, const String &p_base, const Vector<String> &p_args) {
+	String d;
+	switch (p_type) {
+		case Variant::DICTIONARY: {
+			const String b = "VariantInternal::get_dictionary(" + p_base + ")";
+			if (p_method == "has" && p_argc == 1) {
+				return b + "->has(*" + p_args[0] + ")";
+			}
+			if (p_method == "get" && p_argc == 2) {
+				return b + "->get(*" + p_args[0] + ", *" + p_args[1] + ")";
+			}
+			if (p_method == "size" && p_argc == 0) {
+				return b + "->size()";
+			}
+			if (p_method == "is_empty" && p_argc == 0) {
+				return b + "->is_empty()";
+			}
+			if (p_method == "keys" && p_argc == 0) {
+				return b + "->keys()";
+			}
+			if (p_method == "values" && p_argc == 0) {
+				return b + "->values()";
+			}
+		} break;
+		case Variant::ARRAY: {
+			const String b = "VariantInternal::get_array(" + p_base + ")";
+			if (p_method == "size" && p_argc == 0) {
+				return b + "->size()";
+			}
+			if (p_method == "is_empty" && p_argc == 0) {
+				return b + "->is_empty()";
+			}
+			if (p_method == "has" && p_argc == 1) {
+				return b + "->has(*" + p_args[0] + ")";
+			}
+		} break;
+		case Variant::STRING: {
+			const String b = "VariantInternal::get_string(" + p_base + ")";
+			if (p_method == "to_lower" && p_argc == 0) {
+				return b + "->to_lower()";
+			}
+			if (p_method == "to_upper" && p_argc == 0) {
+				return b + "->to_upper()";
+			}
+			if (p_method == "length" && p_argc == 0) {
+				return b + "->length()";
+			}
+			if (p_method == "strip_edges" && p_argc == 0) {
+				return b + "->strip_edges()";
+			}
+		} break;
+		default:
+			break;
+	}
+	return d;
+}
+
 // A named reference to a global name (method/property), recording the use for the enum.
 static String _gname(int p_idx) {
 	if (s_used_gnames) {
@@ -263,7 +342,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, bool &r_ok) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, bool &r_ok) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -331,6 +410,18 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_gname_ident = &gname_ident;
 	s_used_slots = &used_slots;
 	s_used_gnames = &used_gnames;
+
+	// Type map: typed temporaries (VM temporary_slots) + declared argument types.
+	HashMap<int, Variant::Type> slot_types = gds2cpp_temporary_slots();
+	for (int i = 0; i < _argument_count; i++) {
+		Variant::Type t = gds2cpp_arg_builtin_type(i);
+		if (t != Variant::NIL) {
+			slot_types[FIXED_ADDRESSES_MAX + i] = t;
+		}
+	}
+	s_fn = this;
+	s_slot_types = &slot_types;
+	s_member_types = &p_member_types;
 
 	// --- Pass 2: emit the C++ body. ---
 	String b; // body
@@ -432,6 +523,28 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				const int argc = _code_ptr[ip + 2 + iac];
 				const int methodname_idx = _code_ptr[ip + 3 + iac];
 				const int base_addr = _code_ptr[ip + 2 + argc];
+
+				// SPECIALIZATION: if the base is a known builtin type and the method is in the
+				// native table, emit a direct C++ call instead of dynamic by-name callp.
+				Variant::Type bt = _operand_type(base_addr);
+				String native;
+				if (bt != Variant::NIL) {
+					Vector<String> aexpr;
+					for (int i = 0; i < argc; i++) {
+						aexpr.push_back(_addr(_code_ptr[ip + 2 + i]));
+					}
+					native = _native_builtin_expr(bt, String(get_global_name(methodname_idx)), argc, _addr(base_addr), aexpr);
+				}
+				if (!native.is_empty()) {
+					if (ret) {
+						b += "\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = " + native + "; // native " + String(get_global_name(methodname_idx)) + "\n";
+					} else {
+						b += "\t" + native + "; // native " + String(get_global_name(methodname_idx)) + "\n";
+					}
+					ip += iac + 4;
+					break;
+				}
+
 				b += "\t{\n";
 				if (argc > 0) {
 					b += "\t\tconst Variant *ca[] = { ";
@@ -912,12 +1025,15 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			}
 		}
 	}
-	// Naming context is only consulted during pass 2; drop it now.
+	// Naming/type context is only consulted during pass 2; drop it now.
 	s_member_names = nullptr;
 	s_slot_names = nullptr;
 	s_gname_ident = nullptr;
 	s_used_slots = nullptr;
 	s_used_gnames = nullptr;
+	s_fn = nullptr;
+	s_slot_types = nullptr;
+	s_member_types = nullptr;
 
 	// --- Assemble the function. ---
 	String out;

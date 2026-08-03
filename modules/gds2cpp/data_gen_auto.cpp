@@ -32,6 +32,7 @@
 #include "data_gen_auto.h"
 
 #include "core/object/class_db.h"
+#include "core/variant/variant_internal.h"
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
@@ -62,7 +63,7 @@ static constexpr int M_can_override_upgrade_property = 20;
 // func _init():
 // 	process_mode = Node.PROCESS_MODE_ALWAYS
 // ----------------------------------------------------------------------------
-Variant Data_gen::_init(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn__init(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -81,7 +82,7 @@ Variant Data_gen::_init(GDScriptInstance *inst, GDScriptFunction *gf, const Vari
 // func is_mission_starting():
 // 	return Data.ofOr("mission.state", CONST.MISSION_STATE_STARTING) == CONST.MISSION_STATE_STARTING
 // ----------------------------------------------------------------------------
-Variant Data_gen::is_mission_starting(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_is_mission_starting(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -123,7 +124,7 @@ Variant Data_gen::is_mission_starting(GDScriptInstance *inst, GDScriptFunction *
 // 	Data.exams.clear()
 // 	Data.default_properties.clear()
 // ----------------------------------------------------------------------------
-Variant Data_gen::clear_all_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_clear_all_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -249,7 +250,7 @@ Variant Data_gen::clear_all_data(GDScriptInstance *inst, GDScriptFunction *gf, c
 // 	loader.run(self,CORE_YAML_FILES)
 // 	can_override_upgrade_property = false
 // ----------------------------------------------------------------------------
-Variant Data_gen::load_yaml_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_load_yaml_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -292,7 +293,7 @@ Variant Data_gen::load_yaml_data(GDScriptInstance *inst, GDScriptFunction *gf, c
 // 		property_change.apply()
 // 	can_override_upgrade_property = false
 // ----------------------------------------------------------------------------
-Variant Data_gen::reset_to_default_properties(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_reset_to_default_properties(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[7];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -361,7 +362,7 @@ L59:;
 // 		if props.has(property_change.property_key):
 // 			property_change.apply()
 // ----------------------------------------------------------------------------
-Variant Data_gen::reset_to_default_properties_partial(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_reset_to_default_properties_partial(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -376,8 +377,7 @@ Variant Data_gen::reset_to_default_properties_partial(GDScriptInstance *inst, GD
 		Variant::construct((Variant::Type)4, s[8], nullptr, 0, _ce);
 	}
 	enum { GN_property_key = 0,
-		GN_has = 1,
-		GN_apply = 2 }; // "property_key", "has", "apply"
+		GN_apply = 2 }; // "property_key", "apply"
 	Variant &props = s[3]; // arg
 	Variant &property_change = s[4]; // local
 	Variant &_counter_pos = s[5]; // local
@@ -414,13 +414,7 @@ L17:;
 		bool valid;
 		*(&t8) = (&property_change)->get_named(gf->get_global_name(GN_property_key), valid);
 	}
-	{
-		const Variant *ca[] = { (&t8) };
-		Variant cret;
-		Callable::CallError ce;
-		(&props)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t7) = cret;
-	}
+	*(&t7) = VariantInternal::get_dictionary((&props))->has(*(&t8)); // native has
 	if (!bool(*(&t7))) {
 		goto L43;
 	}
@@ -441,7 +435,7 @@ L45:;
 // func has(property:String) -> bool:
 // 	return values.has(property)
 // ----------------------------------------------------------------------------
-Variant Data_gen::has(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_has(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -451,17 +445,10 @@ Variant Data_gen::has(GDScriptInstance *inst, GDScriptFunction *gf, const Varian
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	enum { GN_has = 0 }; // "has"
 	Variant &property = s[3]; // arg
 	Variant &t4 = s[4]; // temp
 	// return values.has(property)
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t4) = cret;
-	}
+	*(&t4) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property)); // native has
 	return *(&t4);
 	return Variant();
 }
@@ -477,7 +464,7 @@ Variant Data_gen::has(GDScriptInstance *inst, GDScriptFunction *gf, const Varian
 // 		return null
 // 	return values[property_key]
 // ----------------------------------------------------------------------------
-Variant Data_gen::of(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_of(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -495,8 +482,7 @@ Variant Data_gen::of(GDScriptInstance *inst, GDScriptFunction *gf, const Variant
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[7], nullptr, 0, _ce);
 	}
-	enum { GN_has = 0,
-		GN_error = 1 }; // "has", "error"
+	enum { GN_error = 1 }; // "error"
 	Variant &property_key = s[3]; // arg
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
@@ -504,13 +490,7 @@ Variant Data_gen::of(GDScriptInstance *inst, GDScriptFunction *gf, const Variant
 	Variant &t7 = s[7]; // temp
 	Variant &t8 = s[8]; // temp
 	// if values.has(property_key):
-	{
-		const Variant *ca[] = { (&property_key) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t4) = cret;
-	}
+	*(&t4) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property_key)); // native has
 	if (!bool(*(&t4))) {
 		goto L23;
 	}
@@ -528,13 +508,7 @@ L23:;
 	}
 	*(&property_key) = *(&t6);
 	// if not values.has(property_key):
-	{
-		const Variant *ca[] = { (&property_key) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t7) = cret;
-	}
+	*(&t7) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property_key)); // native has
 	gf->gds2cpp_operator_func(0)((&t7), (&s[2]), (&t4));
 	if (!bool(*(&t4))) {
 		goto L76;
@@ -569,7 +543,7 @@ L76:;
 // 		return values[property]
 // 	return values.get(property.to_lower(), default)
 // ----------------------------------------------------------------------------
-Variant Data_gen::ofOr(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_ofOr(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -583,21 +557,13 @@ Variant Data_gen::ofOr(GDScriptInstance *inst, GDScriptFunction *gf, const Varia
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[7], nullptr, 0, _ce);
 	}
-	enum { GN_has = 0,
-		GN_get = 1 }; // "has", "get"
 	Variant &property = s[3]; // arg
 	Variant &default_ = s[4]; // arg
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
 	// if values.has(property):
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t5) = cret;
-	}
+	*(&t5) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property)); // native has
 	if (!bool(*(&t5))) {
 		goto L23;
 	}
@@ -613,13 +579,7 @@ L23:;
 	{
 		gf->gds2cpp_builtin_method(0)((&property), nullptr, 0, (&t7));
 	}
-	{
-		const Variant *ca[] = { (&t7), (&default_) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_get), ca, 2, cret, ce);
-		*(&t6) = cret;
-	}
+	*(&t6) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->get(*(&t7), *(&default_)); // native get
 	return *(&t6);
 	*(&t6) = Variant();
 	return Variant();
@@ -647,7 +607,7 @@ L23:;
 // 	for i in invalids:
 // 		unlistenAll(i)
 // ----------------------------------------------------------------------------
-Variant Data_gen::apply(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_apply(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[18];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -677,16 +637,14 @@ Variant Data_gen::apply(GDScriptInstance *inst, GDScriptFunction *gf, const Vari
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[16], nullptr, 0, _ce);
 	}
-	enum { GN_has = 0,
-		GN_warn = 1,
-		GN_get = 2,
+	enum { GN_warn = 1,
 		GN_typeof = 3,
 		GN_duplicate = 4,
 		GN_is_instance_valid = 5,
 		GN_is_inside_tree = 6,
 		GN_gameDataChanged = 7,
 		GN_append = 8,
-		GN_unlistenAll = 9 }; // "has", "warn", "get", "typeof", "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll"
+		GN_unlistenAll = 9 }; // "warn", "typeof", "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll"
 	Variant &property = s[3]; // arg
 	Variant &newValue = s[4]; // arg
 	Variant &oldValue = s[5]; // local
@@ -712,13 +670,7 @@ Variant Data_gen::apply(GDScriptInstance *inst, GDScriptFunction *gf, const Vari
 	if (!bool(*(&t11))) {
 		goto L35;
 	}
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_upgrades_properties)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t12) = cret;
-	}
+	*(&t12) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_upgrades_properties))->has(*(&property)); // native has
 	if (!bool(*(&t12))) {
 		goto L35;
 	}
@@ -743,13 +695,7 @@ L37:;
 	*(&t13) = Variant();
 L61:;
 	// var oldValue = values.get(property, null)
-	{
-		const Variant *ca[] = { (&property), gf->gds2cpp_constant_ptr(1) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_get), ca, 2, cret, ce);
-		*(&t14) = cret;
-	}
+	*(&t14) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->get(*(&property), *gf->gds2cpp_constant_ptr(1)); // native get
 	*(&oldValue) = *(&t14);
 	*(&t14) = Variant();
 	// if typeof(newValue) < TYPE_OBJECT and typeof(oldValue) == typeof(newValue) and oldValue == newValue:
@@ -822,13 +768,7 @@ L150:;
 		*dd = Variant();
 		*dd = a;
 	}
-	{
-		const Variant *ca[] = { (&property), (&t17) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_listeners)->callp(gf->get_global_name(GN_get), ca, 2, cret, ce);
-		*(&t14) = cret;
-	}
+	*(&t14) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_listeners))->get(*(&property), *(&t17)); // native get
 	{
 		Variant cret;
 		Callable::CallError ce;
@@ -952,7 +892,7 @@ L299:;
 // 	values.erase(property)
 // 	listeners.erase(property)
 // ----------------------------------------------------------------------------
-Variant Data_gen::clear(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_clear(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -994,7 +934,7 @@ Variant Data_gen::clear(GDScriptInstance *inst, GDScriptFunction *gf, const Vari
 // 		unlistenAll(i)
 // 	temp_event_call_values.erase(eventId)
 // ----------------------------------------------------------------------------
-Variant Data_gen::event(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_event(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[13];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 3 && i < p_argc; i++) {
@@ -1004,14 +944,13 @@ Variant Data_gen::event(GDScriptInstance *inst, GDScriptFunction *gf, const Vari
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[12], nullptr, 0, _ce);
 	}
-	enum { GN_get = 0,
-		GN_duplicate = 1,
+	enum { GN_duplicate = 1,
 		GN_is_instance_valid = 2,
 		GN_is_inside_tree = 3,
 		GN_gameDataChanged = 4,
 		GN_append = 5,
 		GN_unlistenAll = 6,
-		GN_erase = 7 }; // "get", "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll", "erase"
+		GN_erase = 7 }; // "duplicate", "is_instance_valid", "is_inside_tree", "gameDataChanged", "append", "unlistenAll", "erase"
 	Variant &eventId = s[3]; // arg
 	Variant &oldValue = s[4]; // arg
 	Variant &newValue = s[5]; // arg
@@ -1059,13 +998,7 @@ L7:;
 		*dd = Variant();
 		*dd = a;
 	}
-	{
-		const Variant *ca[] = { (&eventId), (&t11) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_listeners)->callp(gf->get_global_name(GN_get), ca, 2, cret, ce);
-		*(&t10) = cret;
-	}
+	*(&t10) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_listeners))->get(*(&eventId), *(&t11)); // native get
 	*(&receivers) = *(&t10);
 	*(&t11) = Variant();
 	*(&t10) = Variant();
@@ -1218,7 +1151,7 @@ L161:;
 // 	if not listener.tree_exiting.is_connected(onListenerLeftTree):
 // 		listener.tree_exiting.connect(onListenerLeftTree.bind(listener))
 // ----------------------------------------------------------------------------
-Variant Data_gen::listen(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_listen(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[16];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 4 && i < p_argc; i++) {
@@ -1292,13 +1225,7 @@ L7:;
 		gf->gds2cpp_constructor(0)((&list), nullptr);
 	}
 	// if listeners.has(property):
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_listeners)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t9) = cret;
-	}
+	*(&t9) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_listeners))->has(*(&property)); // native has
 	if (!bool(*(&t9))) {
 		goto L52;
 	}
@@ -1387,13 +1314,7 @@ L119:;
 	if (!bool(*(&immediateCallback))) {
 		goto L149;
 	}
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_values)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t13) = cret;
-	}
+	*(&t13) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property)); // native has
 	if (!bool(*(&t13))) {
 		goto L149;
 	}
@@ -1485,7 +1406,7 @@ L243:;
 // 		return false
 // 	return listeners[property].has(listener)
 // ----------------------------------------------------------------------------
-Variant Data_gen::is_listening(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_is_listening(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -1517,13 +1438,7 @@ Variant Data_gen::is_listening(GDScriptInstance *inst, GDScriptFunction *gf, con
 	*(&property) = *(&t5);
 	*(&t5) = Variant();
 	// if not listeners.has(property):
-	{
-		const Variant *ca[] = { (&property) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_listeners)->callp(gf->get_global_name(GN_has), ca, 1, cret, ce);
-		*(&t7) = cret;
-	}
+	*(&t7) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_listeners))->has(*(&property)); // native has
 	gf->gds2cpp_operator_func(0)((&t7), (&s[2]), (&t6));
 	if (!bool(*(&t6))) {
 		goto L34;
@@ -1570,7 +1485,7 @@ L34:;
 // 		for prop in listeners:
 // 			call_deferred("removeListener", listeners[prop], listener)
 // ----------------------------------------------------------------------------
-Variant Data_gen::onListenerLeftTree(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_onListenerLeftTree(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -1641,7 +1556,7 @@ L52:;
 // 	for prop in listeners:
 // 		removeListener(listeners[prop], listener)
 // ----------------------------------------------------------------------------
-Variant Data_gen::unlistenAll(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_unlistenAll(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -1706,7 +1621,7 @@ L38:;
 // 		return
 // 	list.erase(listener)
 // ----------------------------------------------------------------------------
-Variant Data_gen::unlisten(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_unlisten(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[12];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -1724,10 +1639,9 @@ Variant Data_gen::unlisten(GDScriptInstance *inst, GDScriptFunction *gf, const V
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[10], nullptr, 0, _ce);
 	}
-	enum { GN_get = 0,
-		GN_has = 1,
+	enum { GN_has = 1,
 		GN_error = 2,
-		GN_erase = 3 }; // "get", "has", "error", "erase"
+		GN_erase = 3 }; // "has", "error", "erase"
 	Variant &listener = s[3]; // arg
 	Variant &property = s[4]; // arg
 	Variant &list = s[5]; // local
@@ -1750,13 +1664,7 @@ Variant Data_gen::unlisten(GDScriptInstance *inst, GDScriptFunction *gf, const V
 		*dd = Variant();
 		*dd = a;
 	}
-	{
-		const Variant *ca[] = { (&property), (&t8) };
-		Variant cret;
-		Callable::CallError ce;
-		inst->gds2cpp_member_ptr(M_listeners)->callp(gf->get_global_name(GN_get), ca, 2, cret, ce);
-		*(&t7) = cret;
-	}
+	*(&t7) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_listeners))->get(*(&property), *(&t8)); // native get
 	{
 		Variant *td = (&list);
 		const Variant *ts = (&t7);
@@ -1819,7 +1727,7 @@ L82:;
 // func removeListener(list, listener):
 // 	list.erase(listener)
 // ----------------------------------------------------------------------------
-Variant Data_gen::removeListener(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_removeListener(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -1844,7 +1752,7 @@ Variant Data_gen::removeListener(GDScriptInstance *inst, GDScriptFunction *gf, c
 // func clearListeners():
 // 	listeners.clear()
 // ----------------------------------------------------------------------------
-Variant Data_gen::clearListeners(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_clearListeners(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -1863,7 +1771,7 @@ Variant Data_gen::clearListeners(GDScriptInstance *inst, GDScriptFunction *gf, c
 // func changeBy(property:String, change):
 // 	return apply(property, change + ofOr(property,0))
 // ----------------------------------------------------------------------------
-Variant Data_gen::changeBy(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 2 && i < p_argc; i++) {
@@ -1906,7 +1814,7 @@ Variant Data_gen::changeBy(GDScriptInstance *inst, GDScriptFunction *gf, const V
 // func startCaptialized(s:String):
 // 	return s.substr(0,1).to_upper() + s.substr(1,s.length() - 1)
 // ----------------------------------------------------------------------------
-Variant Data_gen::startCaptialized(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_startCaptialized(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -1967,7 +1875,7 @@ Variant Data_gen::startCaptialized(GDScriptInstance *inst, GDScriptFunction *gf,
 // 			saved[x] = values[x]
 // 	return saved
 // ----------------------------------------------------------------------------
-Variant Data_gen::serialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_serialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 0 && i < p_argc; i++) {
@@ -2048,7 +1956,7 @@ L58:;
 // 	for d in data:
 // 		values[d] = data[d]
 // ----------------------------------------------------------------------------
-Variant Data_gen::deserialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_deserialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -2115,7 +2023,7 @@ L38:;
 // 	persistant_properties_cache[prop] = false
 // 	return false
 // ----------------------------------------------------------------------------
-Variant Data_gen::should_property_be_saved(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+Variant Data_gen::fn_should_property_be_saved(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[12];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
 	for (int i = 0; i < 1 && i < p_argc; i++) {
@@ -2223,76 +2131,76 @@ L96:;
 
 Data_gen::Fn Data_gen::lookup(const StringName &p_name) {
 	if (p_name == StringName("_init")) {
-		return &Data_gen::_init;
+		return &Data_gen::fn__init;
 	}
 	if (p_name == StringName("is_mission_starting")) {
-		return &Data_gen::is_mission_starting;
+		return &Data_gen::fn_is_mission_starting;
 	}
 	if (p_name == StringName("clear_all_data")) {
-		return &Data_gen::clear_all_data;
+		return &Data_gen::fn_clear_all_data;
 	}
 	if (p_name == StringName("load_yaml_data")) {
-		return &Data_gen::load_yaml_data;
+		return &Data_gen::fn_load_yaml_data;
 	}
 	if (p_name == StringName("reset_to_default_properties")) {
-		return &Data_gen::reset_to_default_properties;
+		return &Data_gen::fn_reset_to_default_properties;
 	}
 	if (p_name == StringName("reset_to_default_properties_partial")) {
-		return &Data_gen::reset_to_default_properties_partial;
+		return &Data_gen::fn_reset_to_default_properties_partial;
 	}
 	if (p_name == StringName("has")) {
-		return &Data_gen::has;
+		return &Data_gen::fn_has;
 	}
 	if (p_name == StringName("of")) {
-		return &Data_gen::of;
+		return &Data_gen::fn_of;
 	}
 	if (p_name == StringName("ofOr")) {
-		return &Data_gen::ofOr;
+		return &Data_gen::fn_ofOr;
 	}
 	if (p_name == StringName("apply")) {
-		return &Data_gen::apply;
+		return &Data_gen::fn_apply;
 	}
 	if (p_name == StringName("clear")) {
-		return &Data_gen::clear;
+		return &Data_gen::fn_clear;
 	}
 	if (p_name == StringName("event")) {
-		return &Data_gen::event;
+		return &Data_gen::fn_event;
 	}
 	if (p_name == StringName("listen")) {
-		return &Data_gen::listen;
+		return &Data_gen::fn_listen;
 	}
 	if (p_name == StringName("is_listening")) {
-		return &Data_gen::is_listening;
+		return &Data_gen::fn_is_listening;
 	}
 	if (p_name == StringName("onListenerLeftTree")) {
-		return &Data_gen::onListenerLeftTree;
+		return &Data_gen::fn_onListenerLeftTree;
 	}
 	if (p_name == StringName("unlistenAll")) {
-		return &Data_gen::unlistenAll;
+		return &Data_gen::fn_unlistenAll;
 	}
 	if (p_name == StringName("unlisten")) {
-		return &Data_gen::unlisten;
+		return &Data_gen::fn_unlisten;
 	}
 	if (p_name == StringName("removeListener")) {
-		return &Data_gen::removeListener;
+		return &Data_gen::fn_removeListener;
 	}
 	if (p_name == StringName("clearListeners")) {
-		return &Data_gen::clearListeners;
+		return &Data_gen::fn_clearListeners;
 	}
 	if (p_name == StringName("changeBy")) {
-		return &Data_gen::changeBy;
+		return &Data_gen::fn_changeBy;
 	}
 	if (p_name == StringName("startCaptialized")) {
-		return &Data_gen::startCaptialized;
+		return &Data_gen::fn_startCaptialized;
 	}
 	if (p_name == StringName("serialize")) {
-		return &Data_gen::serialize;
+		return &Data_gen::fn_serialize;
 	}
 	if (p_name == StringName("deserialize")) {
-		return &Data_gen::deserialize;
+		return &Data_gen::fn_deserialize;
 	}
 	if (p_name == StringName("should_property_be_saved")) {
-		return &Data_gen::should_property_be_saved;
+		return &Data_gen::fn_should_property_be_saved;
 	}
 	return nullptr;
 }

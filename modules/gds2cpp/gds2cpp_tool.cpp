@@ -423,10 +423,22 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		if (g.is_null()) {
 			continue;
 		}
-		// Skip editor/tool scripts: they extend Editor* native classes that don't exist in a
-		// template build, so binding them at runtime (ResourceLoader::load) spews parse errors.
-		if (String(g->get_instance_base_type()).begins_with("Editor")) {
-			continue;
+		// Skip editor/tool scripts (extends Editor*): they fail to parse in a template build, so
+		// binding them at runtime spews errors. get_instance_base_type() is unreliable here, so
+		// scan the source for the `extends Editor...` line.
+		{
+			bool is_editor = false;
+			const Vector<String> src = _load_source_lines(f);
+			for (int i = 0; i < src.size() && i < 12; i++) {
+				const String t = src[i].strip_edges();
+				if (t.begins_with("extends ") && t.substr(8).strip_edges().begins_with("Editor")) {
+					is_editor = true;
+					break;
+				}
+			}
+			if (is_editor) {
+				continue;
+			}
 		}
 		String base = f.trim_prefix("res://").trim_suffix(".gd");
 		String cpp = "G_" + _sanitize(base);

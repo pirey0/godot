@@ -278,6 +278,13 @@ struct Gds2cppStats {
 	int dyn_many = 0; // 4+ candidates
 	int dyn_none = 0; // 0 candidates (native-only method name)
 	int pic_calls = 0; // dynamic calls converted to a guarded speculative direct call
+	// Of the native-only dynamic calls (no GDScript class defines the name): how the ClassDB
+	// inversion resolves them, and how many became a guarded MethodBind call.
+	int nat_uniq = 0; // 1 native class declares a non-virtual MethodBind for the name
+	int nat_few = 0; // 2-3
+	int nat_many = 0; // 4+
+	int nat_zero = 0; // none (virtual-only, vararg, or truly not in ClassDB)
+	int native_devirt = 0; // native-only sites converted to a guarded MethodBind call
 };
 
 class GDScript;
@@ -685,7 +692,7 @@ public:
 	//   self-calls (routed to a direct C++ call instead of dynamic callp). May be empty.
 	// p_member_classes: member index -> GDScript class it holds (for cross-class devirt).
 	// p_resolver: GDScript class -> {method -> target} for devirt-eligible transpilable methods.
-	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name = nullptr) const;
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name = nullptr, const HashMap<StringName, Vector<StringName>> *p_native_by_name = nullptr) const;
 
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;

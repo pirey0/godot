@@ -250,7 +250,7 @@ static void _collect_lambdas(const String &p_root_key, int p_root_implicit, GDSc
 	}
 }
 
-static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name = nullptr) {
+static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name = nullptr, const HashMap<StringName, Vector<StringName>> *p_native_by_name = nullptr) {
 	const String p_path = gds->get_path();
 	const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &resolver = p_resolver ? *p_resolver : _no_resolver;
 	Vector<String> src_lines = _load_source_lines(p_path);
@@ -275,7 +275,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	String bodies;
 	for (int i = 0; i < ok.size(); i++) {
 		bool okv = false;
-		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name) + "\n";
+		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name, p_native_by_name) + "\n";
 	}
 
 	// Pass B (lambdas): transpile each transpilable nested lambda body with the SAME class
@@ -293,7 +293,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	Vector<LamFn> ok_lams;
 	for (const LamFn &L : lams) {
 		bool okv = false;
-		String body = L.fn->transpile_to_cpp(cls, L.cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name);
+		String body = L.fn->transpile_to_cpp(cls, L.cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name, p_native_by_name);
 		if (okv) {
 			bodies += body + "\n";
 			ok_lams.push_back(L);
@@ -494,10 +494,28 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		}
 	}
 
+	// Native (ClassDB) inversion: method name -> declaring classes with a non-virtual, non-vararg
+	// MethodBind, so dynamic calls whose name no GDScript class defines can still devirt (guarded).
+	HashMap<StringName, Vector<StringName>> native_by_name;
+	{
+		LocalVector<StringName> nclasses;
+		ClassDB::get_class_list(nclasses);
+		for (const StringName &cn : nclasses) {
+			List<MethodInfo> mlist;
+			ClassDB::get_method_list(cn, &mlist, true); // own methods only (no inheritance)
+			for (const MethodInfo &mi : mlist) {
+				MethodBind *mb = ClassDB::get_method(cn, mi.name);
+				if (mb != nullptr && !(mb->get_hint_flags() & METHOD_FLAG_VIRTUAL) && !mb->is_vararg()) {
+					native_by_name[mi.name].push_back(cn);
+				}
+			}
+		}
+	}
+
 	// EMIT with cross-class direct calls resolved against the whole program.
 	String includes, bind_body;
 	for (const Cls &c : classes) {
-		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver, &super_targets, &by_name);
+		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver, &super_targets, &by_name, &native_by_name);
 		includes += "#include \"" + c.cpp + ".h\"\n";
 		bind_body += "\t{ Ref<GDScript> g = ResourceLoader::load(\"" + c.path + "\"); if (g.is_valid()) " + c.cpp + "::bind(g.ptr()); }\n";
 	}
@@ -547,6 +565,13 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		r += vformat("    => %.1f%% of dynamic calls have <=3 candidate classes (guardable)\n",
 				dyn_total ? 100.0 * (stats.dyn_uniq + stats.dyn_few) / dyn_total : 0.0);
 		r += vformat("  guarded speculative devirt emitted: %d sites\n", stats.pic_calls);
+	}
+	const int nat_total = stats.nat_uniq + stats.nat_few + stats.nat_many + stats.nat_zero;
+	if (nat_total > 0) {
+		r += vformat("  native-only names via ClassDB: %d unique, %d few(2-3), %d many(4+), %d unresolved(virtual/vararg/none)\n",
+				stats.nat_uniq, stats.nat_few, stats.nat_many, stats.nat_zero);
+		r += vformat("    => %d resolvable to a MethodBind (measurement only -- callp kept; real native inline needs a typed receiver + curated C++ table)\n",
+				stats.nat_uniq + stats.nat_few);
 	}
 	return r;
 }

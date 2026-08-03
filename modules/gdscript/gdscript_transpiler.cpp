@@ -154,6 +154,9 @@ static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_su
 // Whole-program method-name -> every class's C++ target for it, for guarded speculative devirt of
 // otherwise-dynamic by-name calls (the receiver type is unknown, so a runtime script guard selects).
 static const HashMap<StringName, Vector<Gds2cppTarget>> *s_by_name = nullptr;
+// Native (ClassDB) method name -> declaring class names with a non-virtual MethodBind, for guarded
+// devirt of dynamic calls whose name no GDScript class defines (resolved to a MethodBind at runtime).
+static const HashMap<StringName, Vector<StringName>> *s_native_by_name = nullptr;
 static const HashMap<int, const GDScript *> *s_live_classes = nullptr; // live local slot -> class (per point)
 
 // GDScript class held by an operand (STACK arg/local or MEMBER), or nullptr if unknown.
@@ -588,7 +591,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name, const HashMap<StringName, Vector<StringName>> *p_native_by_name) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -677,6 +680,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_resolver = &p_resolver;
 	s_super_targets = p_super_targets;
 	s_by_name = p_by_name;
+	s_native_by_name = p_native_by_name;
 	// Receiver classes for typed GDScript arguments (slot 3+i).
 	s_slot_classes.clear();
 	for (int i = 0; i < _argument_count && i < argument_types.size(); i++) {
@@ -1115,6 +1119,25 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					}
 					b += " }\n";
 				} else {
+					// No small GDScript candidate set. Measure the native (ClassDB) inversion
+					// opportunity, but keep the call as callp: a guarded MethodBind call is only
+					// break-even (the is-a guard ~cancels callp's saving for light native methods,
+					// and misses add overhead) and, crucially, is NOT inlining -- ClassDB yields a
+					// type-erased MethodBind, not a callable C++ function. Real native inlining needs
+					// the receiver's concrete C++ type (typed dataflow) + a curated name->C++ table.
+					if (s_stats && nc == 0) {
+						const Vector<StringName> *ncands = (s_native_by_name && s_native_by_name->has(mname)) ? &(*s_native_by_name)[mname] : nullptr;
+						const int nnc = ncands ? ncands->size() : 0;
+						if (nnc == 0) {
+							s_stats->nat_zero++;
+						} else if (nnc == 1) {
+							s_stats->nat_uniq++;
+						} else if (nnc <= 3) {
+							s_stats->nat_few++;
+						} else {
+							s_stats->nat_many++;
+						}
+					}
 					b += "\t\tVariant cret; Callable::CallError ce;\n";
 					b += "\t\t" + _addr(base_addr) + "->callp(" + _gname(methodname_idx) + ", " + args + ", " + itos(argc) + ", cret, ce);\n";
 					if (ret) {
@@ -1767,6 +1790,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_resolver = nullptr;
 	s_super_targets = nullptr;
 	s_by_name = nullptr;
+	s_native_by_name = nullptr;
 	s_live_classes = nullptr;
 	s_slot_classes.clear();
 

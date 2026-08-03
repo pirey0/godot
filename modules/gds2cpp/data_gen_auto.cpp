@@ -170,9 +170,6 @@ static constexpr int M_can_override_upgrade_property = 20;
 Variant Data_gen::fn__init(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_process_mode = 0 }; // "process_mode"
 	// process_mode = Node.PROCESS_MODE_ALWAYS
 	{
@@ -189,9 +186,6 @@ Variant Data_gen::fn__init(GDScriptInstance *inst, GDScriptFunction *gf, const V
 Variant Data_gen::fn_is_mission_starting(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_ofOr = 0 }; // "ofOr"
 	Variant &t3 = s[3]; // temp
 	Variant &t4 = s[4]; // temp
@@ -231,9 +225,6 @@ Variant Data_gen::fn_is_mission_starting(GDScriptInstance *inst, GDScriptFunctio
 Variant Data_gen::fn_clear_all_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_missions = 0,
 		GN_upgrades = 1,
 		GN_manuals = 2,
@@ -357,9 +348,6 @@ Variant Data_gen::fn_clear_all_data(GDScriptInstance *inst, GDScriptFunction *gf
 Variant Data_gen::fn_load_yaml_data(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_run = 0 }; // "run"
 	Variant &loader = s[3]; // local
 	Variant &t4 = s[4]; // temp
@@ -400,9 +388,6 @@ Variant Data_gen::fn_load_yaml_data(GDScriptInstance *inst, GDScriptFunction *gf
 Variant Data_gen::fn_reset_to_default_properties(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[7];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_apply = 0 }; // "apply"
 	Variant &property_change = s[3]; // local
 	Variant &_counter_pos = s[4]; // local
@@ -469,8 +454,8 @@ L59:;
 Variant Data_gen::fn_reset_to_default_properties_partial(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -542,14 +527,11 @@ L45:;
 Variant Data_gen::fn_has(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &property = s[3]; // arg
+	Variant &property = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// return values.has(property)
 	*(&t4) = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values))->has(*(&property)); // native has
@@ -571,8 +553,8 @@ Variant Data_gen::fn_has(GDScriptInstance *inst, GDScriptFunction *gf, const Var
 Variant Data_gen::fn_of(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -650,9 +632,6 @@ L76:;
 Variant Data_gen::fn_ofOr(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[5], nullptr, 0, _ce);
@@ -661,8 +640,8 @@ Variant Data_gen::fn_ofOr(GDScriptInstance *inst, GDScriptFunction *gf, const Va
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[7], nullptr, 0, _ce);
 	}
-	Variant &property = s[3]; // arg
-	Variant &default_ = s[4]; // arg
+	Variant &property = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &default_ = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -714,8 +693,11 @@ L23:;
 Variant Data_gen::fn_apply(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[18];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
+	}
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
 	}
 	{
 		Callable::CallError _ce;
@@ -996,11 +978,8 @@ L299:;
 Variant Data_gen::fn_clear(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_erase = 0 }; // "erase"
-	Variant &property = s[3]; // arg
+	Variant &property = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// values.erase(property)
 	{
@@ -1038,8 +1017,14 @@ Variant Data_gen::fn_clear(GDScriptInstance *inst, GDScriptFunction *gf, const V
 Variant Data_gen::fn_event(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[13];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 3 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
+	}
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
+	}
+	if (2 < p_argc) {
+		s[5] = *p_args[2];
 	}
 	{
 		Callable::CallError _ce;
@@ -1252,8 +1237,14 @@ L161:;
 Variant Data_gen::fn_listen(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[16];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 4 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
+	}
+	if (2 < p_argc) {
+		s[5] = *p_args[2];
+	}
+	if (3 < p_argc) {
+		s[6] = *p_args[3];
 	}
 	{
 		Callable::CallError _ce;
@@ -1280,7 +1271,7 @@ Variant Data_gen::fn_listen(GDScriptInstance *inst, GDScriptFunction *gf, const 
 		GN_is_connected = 7,
 		GN_bind = 8,
 		GN_connect = 9 }; // "has", "error", "append", "gameDataChanged", "onListenerLeftTree", "tree_exiting", "is_connected", "bind", "connect"
-	Variant &listener = s[3]; // arg
+	Variant &listener = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &property = s[4]; // arg
 	Variant &immediateCallback = s[5]; // arg
 	Variant &error_on_relisten = s[6]; // arg
@@ -1503,8 +1494,8 @@ L243:;
 Variant Data_gen::fn_is_listening(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
 	}
 	{
 		Callable::CallError _ce;
@@ -1516,7 +1507,7 @@ Variant Data_gen::fn_is_listening(GDScriptInstance *inst, GDScriptFunction *gf, 
 	}
 	enum { GN_to_lower = 0,
 		GN_has = 1 }; // "to_lower", "has"
-	Variant &listener = s[3]; // arg
+	Variant &listener = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &property = s[4]; // arg
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
@@ -1582,8 +1573,8 @@ L34:;
 Variant Data_gen::fn_onListenerLeftTree(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	enum { GN_is_queued_for_deletion = 0 }; // "is_queued_for_deletion"
 	Variant &listener = s[3]; // arg
@@ -1653,8 +1644,8 @@ L52:;
 Variant Data_gen::fn_unlistenAll(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	Variant &listener = s[3]; // arg
 	Variant &prop = s[4]; // local
@@ -1715,8 +1706,8 @@ L38:;
 Variant Data_gen::fn_unlisten(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[12];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
 	}
 	{
 		Callable::CallError _ce;
@@ -1733,7 +1724,7 @@ Variant Data_gen::fn_unlisten(GDScriptInstance *inst, GDScriptFunction *gf, cons
 	enum { GN_has = 1,
 		GN_error = 2,
 		GN_erase = 3 }; // "has", "error", "erase"
-	Variant &listener = s[3]; // arg
+	Variant &listener = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &property = s[4]; // arg
 	Variant &list = s[5]; // local
 	Variant &t6 = s[6]; // temp
@@ -1821,12 +1812,9 @@ L82:;
 Variant Data_gen::fn_removeListener(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN_erase = 0 }; // "erase"
-	Variant &list = s[3]; // arg
-	Variant &listener = s[4]; // arg
+	Variant &list = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &listener = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// list.erase(listener)
 	{
@@ -1846,9 +1834,6 @@ Variant Data_gen::fn_removeListener(GDScriptInstance *inst, GDScriptFunction *gf
 Variant Data_gen::fn_clearListeners(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &t3 = s[3]; // temp
 	// listeners.clear()
 	{
@@ -1865,11 +1850,8 @@ Variant Data_gen::fn_clearListeners(GDScriptInstance *inst, GDScriptFunction *gf
 Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &property = s[3]; // arg
-	Variant &change = s[4]; // arg
+	Variant &property = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &change = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -1900,9 +1882,6 @@ Variant Data_gen::fn_changeBy(GDScriptInstance *inst, GDScriptFunction *gf, cons
 Variant Data_gen::fn_startCaptialized(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[4], nullptr, 0, _ce);
@@ -1923,7 +1902,7 @@ Variant Data_gen::fn_startCaptialized(GDScriptInstance *inst, GDScriptFunction *
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[8], nullptr, 0, _ce);
 	}
-	Variant &s_ = s[3]; // arg
+	Variant &s_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
@@ -1961,9 +1940,6 @@ Variant Data_gen::fn_startCaptialized(GDScriptInstance *inst, GDScriptFunction *
 Variant Data_gen::fn_serialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &saved = s[3]; // local
 	Variant &x = s[4]; // local
 	Variant &_counter_pos = s[5]; // local
@@ -2038,8 +2014,8 @@ L58:;
 Variant Data_gen::fn_deserialize(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	Variant &data = s[3]; // arg
 	Variant &d_ = s[4]; // local
@@ -2105,8 +2081,8 @@ L38:;
 Variant Data_gen::fn_should_property_be_saved(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[12];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;

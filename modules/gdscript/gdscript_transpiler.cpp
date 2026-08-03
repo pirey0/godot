@@ -296,6 +296,7 @@ static int _dst_stack_slot(const int *code, int ip) {
 	// non-variadic op never reads a garbage arg-count. Unknown ops -> clear all (safe).
 	int dst = -1000;
 	switch (G::Opcode(op)) {
+		case G::OPCODE_CALL_RETURN:
 		case G::OPCODE_CALL_BUILTIN_TYPE_VALIDATED:
 		case G::OPCODE_CALL_METHOD_BIND_RET:
 		case G::OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN:
@@ -595,6 +596,45 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			break;
 		}
 		ip += sz;
+	}
+
+	// --- Frame elision: read-only argument aliasing. ---
+	// An argument slot that is never reassigned can alias *p_args[i] directly instead of
+	// getting a per-call Variant copy (which churns a refcount for String/container args --
+	// the dominant cost vs hand-specialized code). Over-report writes to stay safe: any op
+	// whose destination we can't decode (-2) clobbers every arg. In-place container mutation
+	// (SET_*/mutating method base) doesn't reassign the slot and keeps shared-backing
+	// semantics, so a non-const alias is behaviorally identical to the copy.
+	HashSet<int> ro_args;
+	{
+		const int always_present = _argument_count - gds2cpp_default_arg_count();
+		for (int i = 0; i < always_present; i++) {
+			ro_args.insert(i); // defaulted args may be absent -> never aliased
+		}
+		for (int ip = 0; ip < _code_size;) {
+			const int op = _code_ptr[ip];
+			if (op == OPCODE_END) {
+				break;
+			}
+			int d;
+			if (op == OPCODE_ASSIGN) {
+				const int a = _code_ptr[ip + 1];
+				d = ((a >> ADDR_BITS) == ADDR_TYPE_STACK) ? (a & ADDR_MASK) : -1;
+			} else {
+				d = _dst_stack_slot(_code_ptr, ip);
+			}
+			if (d == -2) {
+				ro_args.clear();
+			} else if (d >= FIXED_ADDRESSES_MAX && d < FIXED_ADDRESSES_MAX + _argument_count) {
+				ro_args.erase(d - FIXED_ADDRESSES_MAX);
+			}
+			const int sz = _instr_size(_code_ptr, ip);
+			if (sz <= 0) {
+				ro_args.clear();
+				break;
+			}
+			ip += sz;
+		}
 	}
 
 	// --- Pass 2: emit the C++ body. ---
@@ -1371,7 +1411,12 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	out += "Variant " + p_cpp_class + "::" + p_cpp_func + "(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {\n";
 	out += "\tVariant s[" + itos(_stack_size > 0 ? _stack_size : 1) + "];\n";
 	out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
-	out += "\tfor (int i = 0; i < " + itos(_argument_count) + " && i < p_argc; i++) { s[3 + i] = *p_args[i]; }\n";
+	for (int i = 0; i < _argument_count; i++) {
+		if (ro_args.has(i)) {
+			continue; // read-only: aliased to *p_args[i] below, or unused -- no copy needed
+		}
+		out += "\tif (" + itos(i) + " < p_argc) { s[" + itos(FIXED_ADDRESSES_MAX + i) + "] = *p_args[" + itos(i) + "]; }\n";
+	}
 
 	// Pre-type temporary slots exactly as the VM does at function entry, so validated
 	// builtin-method / operator calls write into correctly-typed destinations.
@@ -1417,7 +1462,12 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			bool named = slot_names.has(idx);
 			String nm = named ? slot_names[idx] : ("t" + itos(idx));
 			String tag = (idx < FIXED_ADDRESSES_MAX + _argument_count) ? "arg" : (named ? "local" : "temp");
-			out += "\tVariant &" + nm + " = s[" + itos(idx) + "]; // " + tag + "\n";
+			const int argi = idx - FIXED_ADDRESSES_MAX;
+			if (argi >= 0 && argi < _argument_count && ro_args.has(argi)) {
+				out += "\tVariant &" + nm + " = *const_cast<Variant *>(p_args[" + itos(argi) + "]); // " + tag + " (aliased, no copy)\n";
+			} else {
+				out += "\tVariant &" + nm + " = s[" + itos(idx) + "]; // " + tag + "\n";
+			}
 		}
 	}
 

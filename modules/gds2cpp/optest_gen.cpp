@@ -300,15 +300,12 @@ static constexpr int M_m_dict = 3;
 Variant OpTest_gen::fn_t_op_add(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[5], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_op_add(a: int, b: int) -> int: return a + b
 	gf->gds2cpp_operator_func(0)((&a_), (&b), (&t5));
@@ -322,9 +319,6 @@ Variant OpTest_gen::fn_t_op_add(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_op_arith(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)3, s[5], nullptr, 0, _ce);
@@ -341,8 +335,8 @@ Variant OpTest_gen::fn_t_op_arith(GDScriptInstance *inst, GDScriptFunction *gf, 
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)3, s[8], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -366,9 +360,6 @@ Variant OpTest_gen::fn_t_op_arith(GDScriptInstance *inst, GDScriptFunction *gf, 
 Variant OpTest_gen::fn_t_op_cmp(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[5], nullptr, 0, _ce);
@@ -389,8 +380,8 @@ Variant OpTest_gen::fn_t_op_cmp(GDScriptInstance *inst, GDScriptFunction *gf, co
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[9], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -444,11 +435,8 @@ L58:;
 Variant OpTest_gen::fn_t_op_eq(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -499,9 +487,6 @@ L32:;
 Variant OpTest_gen::fn_t_op_bit(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[5], nullptr, 0, _ce);
@@ -522,8 +507,8 @@ Variant OpTest_gen::fn_t_op_bit(GDScriptInstance *inst, GDScriptFunction *gf, co
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[9], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
 	Variant &t7 = s[7]; // temp
@@ -545,14 +530,11 @@ Variant OpTest_gen::fn_t_op_bit(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_op_not(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_op_not(a: bool) -> bool: return not a
 	gf->gds2cpp_operator_func(0)((&a_), (&s[2]), (&t4));
@@ -566,14 +548,11 @@ Variant OpTest_gen::fn_t_op_not(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_op_neg(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_op_neg(a: int) -> int: return -a
 	gf->gds2cpp_operator_func(0)((&a_), (&s[2]), (&t4));
@@ -587,15 +566,12 @@ Variant OpTest_gen::fn_t_op_neg(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_op_mod(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[5], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_op_mod(a: int, b: int) -> int: return a % b
 	{
@@ -612,11 +588,8 @@ Variant OpTest_gen::fn_t_op_mod(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_op_in(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &a_ = s[3]; // arg
-	Variant &arr = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &arr = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_op_in(a, arr: Array) -> bool: return a in arr
 	{
@@ -648,15 +621,12 @@ Variant OpTest_gen::fn_t_op_in(GDScriptInstance *inst, GDScriptFunction *gf, con
 Variant OpTest_gen::fn_t_op_str_concat(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[5], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
-	Variant &b = s[4]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &b = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_op_str_concat(a: String, b: String) -> String: return a + b
 	gf->gds2cpp_operator_func(0)((&a_), (&b), (&t5));
@@ -670,15 +640,12 @@ Variant OpTest_gen::fn_t_op_str_concat(GDScriptInstance *inst, GDScriptFunction 
 Variant OpTest_gen::fn_t_construct_vec2(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)5, s[5], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
-	Variant &y = s[4]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &y = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_construct_vec2(x: float, y: float) -> Vector2: return Vector2(x, y)
 	{
@@ -695,16 +662,13 @@ Variant OpTest_gen::fn_t_construct_vec2(GDScriptInstance *inst, GDScriptFunction
 Variant OpTest_gen::fn_t_construct_vec3(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[7];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 3 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)9, s[6], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
-	Variant &y = s[4]; // arg
-	Variant &z = s[5]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &y = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
+	Variant &z = *const_cast<Variant *>(p_args[2]); // arg (aliased, no copy)
 	Variant &t6 = s[6]; // temp
 	// func t_construct_vec3(x: float, y: float, z: float) -> Vector3: return Vector3(x, y, z)
 	{
@@ -721,15 +685,12 @@ Variant OpTest_gen::fn_t_construct_vec3(GDScriptInstance *inst, GDScriptFunction
 Variant OpTest_gen::fn_t_construct_color(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)20, s[5], nullptr, 0, _ce);
 	}
-	Variant &r = s[3]; // arg
-	Variant &g = s[4]; // arg
+	Variant &r = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &g = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_construct_color(r: float, g: float) -> Color: return Color(r, g, 0.0)
 	{
@@ -746,9 +707,6 @@ Variant OpTest_gen::fn_t_construct_color(GDScriptInstance *inst, GDScriptFunctio
 Variant OpTest_gen::fn_t_construct_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &t3 = s[3]; // temp
 	// func t_construct_array() -> Array: return [1, 2, 3, "four"]
 	{
@@ -773,9 +731,6 @@ Variant OpTest_gen::fn_t_construct_array(GDScriptInstance *inst, GDScriptFunctio
 Variant OpTest_gen::fn_t_construct_dict(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &t3 = s[3]; // temp
 	// func t_construct_dict() -> Dictionary: return {"x": 1, "y": 2}
 	{
@@ -797,9 +752,6 @@ Variant OpTest_gen::fn_t_construct_dict(GDScriptInstance *inst, GDScriptFunction
 Variant OpTest_gen::fn_t_typed_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN__ = 0 }; // ""
 	Variant &t3 = s[3]; // temp
 	// func t_typed_array() -> Array[int]: return [1, 2, 3]
@@ -825,9 +777,6 @@ Variant OpTest_gen::fn_t_typed_array(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_typed_dict(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &d_ = s[3]; // local
 	Variant &t4 = s[4]; // temp
 	// var d: Dictionary = {}
@@ -855,11 +804,8 @@ Variant OpTest_gen::fn_t_typed_dict(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_get_indexed(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &arr = s[3]; // arg
-	Variant &i_ = s[4]; // arg
+	Variant &arr = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &i_ = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_get_indexed(arr: Array, i: int): return arr[i]
 	{
@@ -879,12 +825,9 @@ Variant OpTest_gen::fn_t_get_indexed(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_set_indexed(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 3 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &arr = s[3]; // arg
-	Variant &i_ = s[4]; // arg
-	Variant &v = s[5]; // arg
+	Variant &arr = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &i_ = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
+	Variant &v = *const_cast<Variant *>(p_args[2]); // arg (aliased, no copy)
 	// arr[i] = v
 	{
 		bool valid;
@@ -901,11 +844,8 @@ Variant OpTest_gen::fn_t_set_indexed(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_get_keyed(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &d_ = s[3]; // arg
-	Variant &k = s[4]; // arg
+	Variant &d_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &k = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	Variant &t5 = s[5]; // temp
 	// func t_get_keyed(d: Dictionary, k): return d[k]
 	{
@@ -925,12 +865,9 @@ Variant OpTest_gen::fn_t_get_keyed(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_set_keyed(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 3 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &d_ = s[3]; // arg
-	Variant &k = s[4]; // arg
-	Variant &v = s[5]; // arg
+	Variant &d_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &k = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
+	Variant &v = *const_cast<Variant *>(p_args[2]); // arg (aliased, no copy)
 	// d[k] = v
 	{
 		bool valid;
@@ -947,14 +884,11 @@ Variant OpTest_gen::fn_t_set_keyed(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_get_named(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)3, s[4], nullptr, 0, _ce);
 	}
-	Variant &v = s[3]; // arg
+	Variant &v = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_get_named(v: Vector2) -> float: return v.x
 	gf->gds2cpp_getter(0)((&v), (&t4));
@@ -970,11 +904,8 @@ Variant OpTest_gen::fn_t_get_named(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_set_named(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 2 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &v = s[3]; // arg
-	Variant &x = s[4]; // arg
+	Variant &v = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
+	Variant &x = *const_cast<Variant *>(p_args[1]); // arg (aliased, no copy)
 	// v.x = x
 	gf->gds2cpp_setter(0)((&v), (&x));
 	// return v
@@ -988,9 +919,6 @@ Variant OpTest_gen::fn_t_set_named(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_get_member(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	// func t_get_member() -> int: return m_int
 	return *inst->gds2cpp_member_ptr(M_m_int);
 	return Variant();
@@ -1004,10 +932,7 @@ Variant OpTest_gen::fn_t_get_member(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_set_member(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
-	Variant &v = s[3]; // arg
+	Variant &v = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	// m_int = v
 	*inst->gds2cpp_member_ptr(M_m_int) = *(&v);
 	// return m_int
@@ -1021,9 +946,6 @@ Variant OpTest_gen::fn_t_set_member(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_member_arr(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	// func t_member_arr() -> Array: return m_arr
 	return *inst->gds2cpp_member_ptr(M_m_arr);
 	return Variant();
@@ -1035,9 +957,6 @@ Variant OpTest_gen::fn_t_member_arr(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_member_dict_str(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	// func t_member_dict_str() -> String: return m_str
 	return *inst->gds2cpp_member_ptr(M_m_str);
 	return Variant();
@@ -1049,14 +968,11 @@ Variant OpTest_gen::fn_t_member_dict_str(GDScriptInstance *inst, GDScriptFunctio
 Variant OpTest_gen::fn_t_cast_int(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_cast_int(x) -> int: return x as int
 	{
@@ -1074,14 +990,11 @@ Variant OpTest_gen::fn_t_cast_int(GDScriptInstance *inst, GDScriptFunction *gf, 
 Variant OpTest_gen::fn_t_cast_float(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)3, s[4], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_cast_float(x) -> float: return x as float
 	{
@@ -1099,15 +1012,12 @@ Variant OpTest_gen::fn_t_cast_float(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_cast_string(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[4], nullptr, 0, _ce);
 	}
 	enum { GN_str = 0 }; // "str"
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_cast_string(x) -> String: return str(x)
 	{
@@ -1125,14 +1035,11 @@ Variant OpTest_gen::fn_t_cast_string(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_is_builtin(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_is_builtin(x) -> bool: return x is int
 	*(&t4) = ((&x)->get_type() == (Variant::Type)2);
@@ -1146,14 +1053,11 @@ Variant OpTest_gen::fn_t_is_builtin(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_is_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_is_array(x) -> bool: return x is Array
 	*(&t4) = ((&x)->get_type() == (Variant::Type)28);
@@ -1167,14 +1071,11 @@ Variant OpTest_gen::fn_t_is_array(GDScriptInstance *inst, GDScriptFunction *gf, 
 Variant OpTest_gen::fn_t_is_string(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &x = s[3]; // arg
+	Variant &x = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_is_string(x) -> bool: return x is String
 	*(&t4) = ((&x)->get_type() == (Variant::Type)4);
@@ -1191,14 +1092,11 @@ Variant OpTest_gen::fn_t_is_string(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_if(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[4], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// if a > 10: return "big"
 	gf->gds2cpp_operator_func(0)((&a_), gf->gds2cpp_constant_ptr(0), (&t4));
@@ -1236,9 +1134,6 @@ L36:;
 Variant OpTest_gen::fn_t_while(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[6], nullptr, 0, _ce);
@@ -1247,7 +1142,7 @@ Variant OpTest_gen::fn_t_while(GDScriptInstance *inst, GDScriptFunction *gf, con
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[7], nullptr, 0, _ce);
 	}
-	Variant &n = s[3]; // arg
+	Variant &n = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &s_ = s[4]; // local
 	Variant &i_ = s[5]; // local
 	Variant &t6 = s[6]; // temp
@@ -1281,9 +1176,6 @@ L42:;
 Variant OpTest_gen::fn_t_ternary(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[4], nullptr, 0, _ce);
@@ -1292,7 +1184,7 @@ Variant OpTest_gen::fn_t_ternary(GDScriptInstance *inst, GDScriptFunction *gf, c
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[5], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
 	// func t_ternary(a: int) -> String: return "yes" if a > 0 else "no"
@@ -1318,8 +1210,8 @@ L18:;
 Variant OpTest_gen::fn_t_for_range(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1376,8 +1268,14 @@ L34:;
 Variant OpTest_gen::fn_t_for_range3(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[13];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 3 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
+	}
+	if (1 < p_argc) {
+		s[4] = *p_args[1];
+	}
+	if (2 < p_argc) {
+		s[5] = *p_args[2];
 	}
 	{
 		Callable::CallError _ce;
@@ -1443,8 +1341,8 @@ L43:;
 Variant OpTest_gen::fn_t_for_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1511,8 +1409,8 @@ L40:;
 Variant OpTest_gen::fn_t_for_int_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1569,8 +1467,8 @@ L34:;
 Variant OpTest_gen::fn_t_for_float(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1627,8 +1525,8 @@ L34:;
 Variant OpTest_gen::fn_t_for_string(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1685,8 +1583,8 @@ L34:;
 Variant OpTest_gen::fn_t_for_dict(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	enum { GN_append = 0 }; // "append"
 	Variant &d_ = s[3]; // arg
@@ -1753,8 +1651,8 @@ L41:;
 Variant OpTest_gen::fn_t_for_packed_int(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1811,8 +1709,8 @@ L34:;
 Variant OpTest_gen::fn_t_for_packed_str(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[9];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1869,8 +1767,8 @@ L34:;
 Variant OpTest_gen::fn_t_for_vec2(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[10];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
+	if (0 < p_argc) {
+		s[3] = *p_args[0];
 	}
 	{
 		Callable::CallError _ce;
@@ -1930,9 +1828,6 @@ L38:;
 Variant OpTest_gen::fn_t_call_utility(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[8];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)3, s[6], nullptr, 0, _ce);
@@ -1942,7 +1837,7 @@ Variant OpTest_gen::fn_t_call_utility(GDScriptInstance *inst, GDScriptFunction *
 		Variant::construct((Variant::Type)3, s[7], nullptr, 0, _ce);
 	}
 	enum { GN_abs = 0 }; // "abs"
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
@@ -1991,14 +1886,11 @@ Variant OpTest_gen::fn_t_call_utility(GDScriptInstance *inst, GDScriptFunction *
 Variant OpTest_gen::fn_t_call_len(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &arr = s[3]; // arg
+	Variant &arr = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_call_len(arr: Array) -> int: return len(arr)
 	{
@@ -2016,14 +1908,11 @@ Variant OpTest_gen::fn_t_call_len(GDScriptInstance *inst, GDScriptFunction *gf, 
 Variant OpTest_gen::fn_t_call_self(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// func t_call_self(a: int) -> int: return t_op_add(a, 1)
 	{
@@ -2040,9 +1929,6 @@ Variant OpTest_gen::fn_t_call_self(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_call_builtin_static(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)20, s[3], nullptr, 0, _ce);
@@ -2065,9 +1951,6 @@ Variant OpTest_gen::fn_t_call_builtin_static(GDScriptInstance *inst, GDScriptFun
 Variant OpTest_gen::fn_t_call_method(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[4], nullptr, 0, _ce);
@@ -2076,7 +1959,7 @@ Variant OpTest_gen::fn_t_call_method(GDScriptInstance *inst, GDScriptFunction *g
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[5], nullptr, 0, _ce);
 	}
-	Variant &s_ = s[3]; // arg
+	Variant &s_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
 	// func t_call_method(s: String) -> String: return s.to_upper().strip_edges()
@@ -2094,9 +1977,6 @@ Variant OpTest_gen::fn_t_call_method(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_ret_int(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[3];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	// func t_ret_int() -> int: return 42
 	return *gf->gds2cpp_constant_ptr(0);
 	return Variant();
@@ -2108,9 +1988,6 @@ Variant OpTest_gen::fn_t_ret_int(GDScriptInstance *inst, GDScriptFunction *gf, c
 Variant OpTest_gen::fn_t_ret_array(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN__ = 0 }; // ""
 	Variant &t3 = s[3]; // temp
 	// func t_ret_array() -> Array[int]: return [9, 8, 7]
@@ -2133,9 +2010,6 @@ Variant OpTest_gen::fn_t_ret_array(GDScriptInstance *inst, GDScriptFunction *gf,
 Variant OpTest_gen::fn_t_ret_dict(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	Variant &t3 = s[3]; // temp
 	// func t_ret_dict() -> Dictionary: return {"k": "v"}
 	{
@@ -2158,14 +2032,11 @@ Variant OpTest_gen::fn_t_ret_dict(GDScriptInstance *inst, GDScriptFunction *gf, 
 Variant OpTest_gen::fn_t_assert(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &a_ = s[3]; // arg
+	Variant &a_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// assert(a >= 0)
 	// return a * 2
@@ -2181,9 +2052,6 @@ Variant OpTest_gen::fn_t_assert(GDScriptInstance *inst, GDScriptFunction *gf, co
 Variant OpTest_gen::fn_t_string_ops(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[7];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)4, s[4], nullptr, 0, _ce);
@@ -2197,7 +2065,7 @@ Variant OpTest_gen::fn_t_string_ops(GDScriptInstance *inst, GDScriptFunction *gf
 		Variant::construct((Variant::Type)4, s[6], nullptr, 0, _ce);
 	}
 	enum { GN_substr = 0 }; // "substr"
-	Variant &s_ = s[3]; // arg
+	Variant &s_ = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	Variant &t5 = s[5]; // temp
 	Variant &t6 = s[6]; // temp
@@ -2227,9 +2095,6 @@ Variant OpTest_gen::fn_t_string_ops(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_static_get(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[4];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[3], nullptr, 0, _ce);
@@ -2249,14 +2114,11 @@ Variant OpTest_gen::fn_t_static_get(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_static_set(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 1 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
 	}
-	Variant &v = s[3]; // arg
+	Variant &v = *const_cast<Variant *>(p_args[0]); // arg (aliased, no copy)
 	Variant &t4 = s[4]; // temp
 	// s_counter = v
 	*(&t4) = *(&v);
@@ -2275,9 +2137,6 @@ Variant OpTest_gen::fn_t_static_set(GDScriptInstance *inst, GDScriptFunction *gf
 Variant OpTest_gen::fn_t_typed_dict2(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[5];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	enum { GN__ = 0 }; // ""
 	Variant &d_ = s[3]; // local
 	Variant &t4 = s[4]; // temp
@@ -2303,9 +2162,6 @@ Variant OpTest_gen::fn_t_typed_dict2(GDScriptInstance *inst, GDScriptFunction *g
 Variant OpTest_gen::fn_t_method_bind_validated(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)2, s[5], nullptr, 0, _ce);
@@ -2342,9 +2198,6 @@ Variant OpTest_gen::fn_t_method_bind_validated(GDScriptInstance *inst, GDScriptF
 Variant OpTest_gen::fn_t_native_static(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
 	Variant s[6];
 	s[0] = inst ? Variant(inst->get_owner()) : Variant();
-	for (int i = 0; i < 0 && i < p_argc; i++) {
-		s[3 + i] = *p_args[i];
-	}
 	{
 		Callable::CallError _ce;
 		Variant::construct((Variant::Type)1, s[5], nullptr, 0, _ce);

@@ -1523,17 +1523,22 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_CAST_TO_NATIVE: {
-				// x as NativeClass: keep the object if it derives from the class, else null.
-				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 1]) + "->operator Object *(); StringName _cn = " + _addr(_code_ptr[ip + 2]) + "->operator StringName(); *" + _addr(_code_ptr[ip + 3]) + " = (_o && ClassDB::is_parent_class(_o->get_class_name(), _cn)) ? Variant(_o) : Variant(); }\n";
+				// x as NativeClass. Operands: src=ip+1, dst=ip+2, to_type=ip+3 (a Variant holding
+				// a GDScriptNativeClass object). Keep the object if it derives from the class, else
+				// null; a null source passes through as null (mirrors the VM).
+				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 1]) + "->operator Object *(); GDScriptNativeClass *_nc = Object::cast_to<GDScriptNativeClass>(" + _addr(_code_ptr[ip + 3]) + "->operator Object *()); *" + _addr(_code_ptr[ip + 2]) + " = (_o && !(_nc && ClassDB::is_parent_class(_o->get_class_name(), _nc->get_name()))) ? Variant() : *" + _addr(_code_ptr[ip + 1]) + "; }\n";
 				ip += 4;
 			} break;
 			case OPCODE_CAST_TO_SCRIPT: {
 				// Faithful-simplified: pass the object through (script identity check omitted).
-				b += "\t*" + _addr(_code_ptr[ip + 3]) + " = *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				// Operands: src=ip+1, dst=ip+2, to_type=ip+3.
+				b += "\t*" + _addr(_code_ptr[ip + 2]) + " = *" + _addr(_code_ptr[ip + 1]) + ";\n";
 				ip += 4;
 			} break;
 			case OPCODE_TYPE_TEST_SCRIPT: {
-				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); ScriptInstance *_si = _o ? _o->get_script_instance() : nullptr; Object *_exp = " + _addr(_code_ptr[ip + 3]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (_si && _si->get_script().ptr() == _exp); }\n";
+				// `value is ScriptClass`: true if the value's script chain includes the class
+				// (walk base scripts, like the VM), not just an exact-script match.
+				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); Script *_st = Object::cast_to<Script>(" + _addr(_code_ptr[ip + 3]) + "->operator Object *()); bool _r = false; if (_o && _o->get_script_instance()) { Script *_sp = _o->get_script_instance()->get_script().ptr(); while (_sp) { if (_sp == _st) { _r = true; break; } _sp = _sp->get_base_script().ptr(); } } *" + _addr(_code_ptr[ip + 1]) + " = _r; }\n";
 				ip += 4;
 			} break;
 			case OPCODE_JUMP_IF_SHARED: {

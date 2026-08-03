@@ -52,4 +52,5 @@ public:
 
 	// Writes a compilable <file_base>.{h,cpp} (struct <cpp_class>) into p_out_dir.
 	String transpile_module_files(const String &p_path, const String &p_out_dir, const String &p_cpp_class, const String &p_file_base);
+	String transpile_program(const String &p_root, const String &p_out_dir);
 };

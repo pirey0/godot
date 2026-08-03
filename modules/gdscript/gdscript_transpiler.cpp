@@ -1305,7 +1305,31 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_STORE_GLOBAL: {
-				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = GDScriptLanguage::get_singleton()->get_global_array()[" + itos(_code_ptr[ip + 2]) + "];\n";
+				// The raw global-array index is assigned when the script is compiled and is
+				// NOT stable across environments (it depends on how many globals happen to be
+				// registered). Baking it produces an out-of-bounds read at runtime when the
+				// transpile-time and runtime global tables differ. Bake the global's NAME and
+				// resolve the index at runtime instead, bounds-checked to a nil fallback.
+				const int gidx = _code_ptr[ip + 2];
+				String gname;
+				for (const KeyValue<StringName, int> &e : GDScriptLanguage::get_singleton()->get_global_map()) {
+					if (e.value == gidx) {
+						gname = String(e.key);
+						break;
+					}
+				}
+				const String dst = _addr(_code_ptr[ip + 1]);
+				if (!gname.is_empty()) {
+					// Resolve the name -> index once, then cache it (constant-initialized static,
+					// so no thread guard). Steady state is a branch + bounds check + array read.
+					// Re-look up only while unresolved, in case the first call precedes the
+					// global's registration; the bounds check keeps a stale/missing slot safe.
+					b += "\t{ static int _gi = -1; GDScriptLanguage *_gl = GDScriptLanguage::get_singleton();\n";
+					b += "\t\tif (unlikely(_gi < 0)) { HashMap<StringName, int>::ConstIterator _it = _gl->get_global_map().find(StringName(\"" + gname.c_escape() + "\")); if (_it) { _gi = _it->value; } }\n";
+					b += "\t\t*" + dst + " = (_gi >= 0 && _gi < _gl->get_global_array_size()) ? _gl->get_global_array()[_gi] : Variant(); }\n";
+				} else {
+					b += "\t{ GDScriptLanguage *_gl = GDScriptLanguage::get_singleton(); int _gi = " + itos(gidx) + "; *" + dst + " = (_gi >= 0 && _gi < _gl->get_global_array_size()) ? _gl->get_global_array()[_gi] : Variant(); }\n";
+				}
 				ip += 3;
 			} break;
 			case OPCODE_CONSTRUCT_DICTIONARY: {

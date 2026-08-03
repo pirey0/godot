@@ -32,6 +32,7 @@
 
 #include "gdscript.h"
 
+#include "core/object/method_bind.h"
 #include "core/object/script_language.h"
 #include "core/string/ustring.h"
 #include "core/templates/hash_map.h"
@@ -123,12 +124,16 @@ static Gds2cppStats *s_stats = nullptr; // optional per-call-site outcome tally
 static HashMap<int, const GDScript *> s_slot_classes; // stack idx -> GDScript class (from arg types)
 static const HashMap<int, const GDScript *> *s_member_classes = nullptr; // member idx -> class
 static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_resolver = nullptr;
+static const HashMap<int, const GDScript *> *s_live_classes = nullptr; // live local slot -> class (per point)
 
-// GDScript class held by an operand (STACK arg or MEMBER), or nullptr if unknown.
+// GDScript class held by an operand (STACK arg/local or MEMBER), or nullptr if unknown.
 static const GDScript *_operand_class(int p_addr) {
 	const int idx = p_addr & GDScriptFunction::ADDR_MASK;
 	switch (p_addr >> GDScriptFunction::ADDR_BITS) {
 		case GDScriptFunction::ADDR_TYPE_STACK:
+			if (s_live_classes && s_live_classes->has(idx)) {
+				return (*s_live_classes)[idx];
+			}
 			return s_slot_classes.has(idx) ? s_slot_classes[idx] : nullptr;
 		case GDScriptFunction::ADDR_TYPE_MEMBER:
 			return (s_member_classes && s_member_classes->has(idx)) ? (*s_member_classes)[idx] : nullptr;
@@ -208,6 +213,113 @@ static String _native_builtin_expr(Variant::Type p_type, const String &p_method,
 			break;
 	}
 	return d;
+}
+
+// The stack slot an instruction writes (for live-class invalidation), or -1 if it
+// writes no stack slot (member/keyed mutation, jumps, returns, sets, no-ret calls),
+// or -2 if unknown (caller clears all live state to stay safe).
+static int _dst_stack_slot(const int *code, int ip) {
+	using G = GDScriptFunction;
+	const int op = code[ip];
+	if (op >= G::OPCODE_TYPE_ADJUST_BOOL && op <= G::OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY) {
+		const int a = code[ip + 1];
+		return (a >> G::ADDR_BITS) == G::ADDR_TYPE_STACK ? (a & G::ADDR_MASK) : -1;
+	}
+	int a = -1000; // dst address (or -1000 = handled below)
+	switch (G::Opcode(op)) {
+		case G::OPCODE_ASSIGN_NULL:
+		case G::OPCODE_ASSIGN_TRUE:
+		case G::OPCODE_ASSIGN_FALSE:
+		case G::OPCODE_ASSIGN_TYPED_BUILTIN:
+		case G::OPCODE_ASSIGN_TYPED_NATIVE:
+		case G::OPCODE_ASSIGN_TYPED_ARRAY:
+		case G::OPCODE_ASSIGN_TYPED_DICTIONARY:
+		case G::OPCODE_GET_MEMBER:
+		case G::OPCODE_GET_STATIC_VARIABLE:
+		case G::OPCODE_STORE_GLOBAL:
+		case G::OPCODE_STORE_NAMED_GLOBAL:
+		case G::OPCODE_TYPE_TEST_BUILTIN:
+		case G::OPCODE_TYPE_TEST_NATIVE:
+		case G::OPCODE_TYPE_TEST_SCRIPT:
+		case G::OPCODE_TYPE_TEST_ARRAY:
+		case G::OPCODE_TYPE_TEST_DICTIONARY:
+			a = code[ip + 1];
+			break;
+		case G::OPCODE_GET_NAMED:
+		case G::OPCODE_GET_NAMED_VALIDATED:
+		case G::OPCODE_CAST_TO_BUILTIN:
+			a = code[ip + 2];
+			break;
+		case G::OPCODE_OPERATOR:
+		case G::OPCODE_OPERATOR_VALIDATED:
+		case G::OPCODE_GET_KEYED:
+		case G::OPCODE_GET_KEYED_VALIDATED:
+		case G::OPCODE_GET_INDEXED_VALIDATED:
+		case G::OPCODE_CAST_TO_NATIVE:
+		case G::OPCODE_CAST_TO_SCRIPT:
+			a = code[ip + 3];
+			break;
+		// Non-writers (no stack dst).
+		case G::OPCODE_LINE:
+		case G::OPCODE_JUMP:
+		case G::OPCODE_JUMP_IF:
+		case G::OPCODE_JUMP_IF_NOT:
+		case G::OPCODE_JUMP_IF_SHARED:
+		case G::OPCODE_JUMP_TO_DEF_ARGUMENT:
+		case G::OPCODE_RETURN:
+		case G::OPCODE_RETURN_TYPED_BUILTIN:
+		case G::OPCODE_RETURN_TYPED_ARRAY:
+		case G::OPCODE_RETURN_TYPED_DICTIONARY:
+		case G::OPCODE_RETURN_TYPED_NATIVE:
+		case G::OPCODE_RETURN_TYPED_SCRIPT:
+		case G::OPCODE_SET_KEYED:
+		case G::OPCODE_SET_KEYED_VALIDATED:
+		case G::OPCODE_SET_INDEXED_VALIDATED:
+		case G::OPCODE_SET_NAMED:
+		case G::OPCODE_SET_NAMED_VALIDATED:
+		case G::OPCODE_SET_MEMBER:
+		case G::OPCODE_SET_STATIC_VARIABLE:
+		case G::OPCODE_ASSERT:
+		case G::OPCODE_BREAKPOINT:
+		case G::OPCODE_CALL:
+		case G::OPCODE_CALL_METHOD_BIND:
+		case G::OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN:
+		case G::OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN:
+			return -1;
+		default:
+			break;
+	}
+	if (a != -1000) {
+		return (a >> G::ADDR_BITS) == G::ADDR_TYPE_STACK ? (a & G::ADDR_MASK) : -1;
+	}
+	// Variadic-arg (LOAD_INSTRUCTION_ARGS) opcodes: compute argc only for these, so a
+	// non-variadic op never reads a garbage arg-count. Unknown ops -> clear all (safe).
+	int dst = -1000;
+	switch (G::Opcode(op)) {
+		case G::OPCODE_CALL_BUILTIN_TYPE_VALIDATED:
+		case G::OPCODE_CALL_METHOD_BIND_RET:
+		case G::OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN:
+			dst = code[ip + 3 + code[ip + 2 + code[ip + 1]]];
+			break;
+		case G::OPCODE_CALL_UTILITY:
+		case G::OPCODE_CALL_UTILITY_VALIDATED:
+		case G::OPCODE_CALL_GDSCRIPT_UTILITY:
+		case G::OPCODE_CALL_NATIVE_STATIC:
+		case G::OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN:
+		case G::OPCODE_CONSTRUCT:
+		case G::OPCODE_CONSTRUCT_VALIDATED:
+		case G::OPCODE_CONSTRUCT_ARRAY:
+		case G::OPCODE_CONSTRUCT_TYPED_ARRAY:
+			dst = code[ip + 2 + code[ip + 2 + code[ip + 1]]];
+			break;
+		case G::OPCODE_CONSTRUCT_DICTIONARY:
+		case G::OPCODE_CONSTRUCT_TYPED_DICTIONARY:
+			dst = code[ip + 2 + code[ip + 2 + code[ip + 1]] * 2];
+			break;
+		default:
+			return -2; // unknown -> caller clears all
+	}
+	return (dst >> G::ADDR_BITS) == G::ADDR_TYPE_STACK ? (dst & G::ADDR_MASK) : -1;
 }
 
 // A named reference to a global name (method/property), recording the use for the enum.
@@ -457,17 +569,50 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			s_slot_classes[FIXED_ADDRESSES_MAX + i] = Object::cast_to<GDScript>(dt.script_type);
 		}
 	}
+	// Local GDScript-typed variables: recover from ASSIGN_TYPED_SCRIPT writes to
+	// single-owner slots (single owner via stack_debug => the slot always holds that
+	// class across the function, so devirtualizing calls on it is safe). Slots reused
+	// for different types aren't single-owner and are left untyped.
+	for (int ip = 0; ip < _code_size;) {
+		Opcode o = Opcode(_code_ptr[ip]);
+		if (o == OPCODE_END) {
+			break;
+		}
+		if (o == OPCODE_ASSIGN_TYPED_SCRIPT) {
+			const int dst = _code_ptr[ip + 1];
+			const int top = _code_ptr[ip + 3]; // script-type operand (a constant)
+			if ((dst >> ADDR_BITS) == ADDR_TYPE_STACK && (top >> ADDR_BITS) == ADDR_TYPE_CONSTANT) {
+				const int slot = dst & ADDR_MASK;
+				if (slot_names.has(slot)) {
+					GDScript *c = Object::cast_to<GDScript>(get_constant(top & ADDR_MASK).operator Object *());
+					// nullptr marks a conflict (mixed classes) -> treated as unknown by _operand_class.
+					s_slot_classes[slot] = (c && (!s_slot_classes.has(slot) || s_slot_classes[slot] == c)) ? c : nullptr;
+				}
+			}
+		}
+		const int sz = _instr_size(_code_ptr, ip);
+		if (sz <= 0) {
+			break;
+		}
+		ip += sz;
+	}
 
 	// --- Pass 2: emit the C++ body. ---
+	// Live local-slot classes, cleared at every block boundary (conservative dataflow).
+	HashMap<int, const GDScript *> live;
+	s_live_classes = &live;
 	String b; // body
 	for (int ip = 0; ip < _code_size;) {
 		if (jump_targets.has(ip)) {
 			b += "L" + itos(ip) + ":;\n";
+			live.clear(); // join point: local types don't survive across blocks
 		}
 		Opcode op = Opcode(_code_ptr[ip]);
+		const int ip0 = ip;
 
 		// --- Families handled by range (pre-switch), all faithful. ---
 		if (op >= OPCODE_TYPE_ADJUST_BOOL && op <= OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY) {
+			live.clear();
 			int t = (int)op - (int)OPCODE_TYPE_ADJUST_BOOL + (int)Variant::BOOL;
 			const String a = _addr(_code_ptr[ip + 1]);
 			b += "\t{ Variant *_a = " + a + "; if (_a->get_type() != (Variant::Type)" + itos(t) + ") { const Variant *_ai = _a; Callable::CallError _ce; Variant _tmp; Variant::construct((Variant::Type)" + itos(t) + ", _tmp, &_ai, 1, _ce); *_a = _tmp; } }\n";
@@ -475,6 +620,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			continue;
 		}
 		if (op == OPCODE_ITERATE_BEGIN_RANGE) {
+			live.clear();
 			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; int64_t _from = (int64_t)*" + _addr(_code_ptr[ip + 2]) + "; int64_t _to = (int64_t)*" + _addr(_code_ptr[ip + 3]) + "; int64_t _step = (int64_t)*" + _addr(_code_ptr[ip + 4]) + ";\n";
 			b += "\t\t*ctr = _from;\n";
 			b += "\t\tif (!(_from == _to ? false : (_from < _to ? _step > 0 : _step < 0))) goto L" + itos(_code_ptr[ip + 6]) + ";\n";
@@ -483,6 +629,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			continue;
 		}
 		if (op == OPCODE_ITERATE_RANGE) {
+			live.clear();
 			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; int64_t _to = (int64_t)*" + _addr(_code_ptr[ip + 2]) + "; int64_t _step = (int64_t)*" + _addr(_code_ptr[ip + 3]) + ";\n";
 			b += "\t\tint64_t _c = (int64_t)*ctr + _step; *ctr = _c;\n";
 			b += "\t\tif ((_step < 0 && _c <= _to) || (_step > 0 && _c >= _to)) goto L" + itos(_code_ptr[ip + 5]) + ";\n";
@@ -491,7 +638,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			continue;
 		}
 		if (op >= OPCODE_ITERATE_BEGIN && op <= OPCODE_ITERATE_BEGIN_RANGE) { // typed BEGIN -> generic iter protocol
-			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
+			live.clear();
+			b += "\t{ Variant *ctr =" + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
 			b += "\t\t*ctr = Variant();\n";
 			b += "\t\tif (!cont->iter_init(*ctr, valid)) goto L" + itos(_code_ptr[ip + 4]) + ";\n";
 			b += "\t\t*" + _addr(_code_ptr[ip + 3]) + " = cont->iter_get(*ctr, valid); }\n";
@@ -499,7 +647,8 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			continue;
 		}
 		if (op >= OPCODE_ITERATE && op <= OPCODE_ITERATE_RANGE) { // typed ITERATE -> generic iter protocol
-			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
+			live.clear();
+			b += "\t{ Variant *ctr =" + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
 			b += "\t\tif (!cont->iter_next(*ctr, valid)) goto L" + itos(_code_ptr[ip + 4]) + ";\n";
 			b += "\t\t*" + _addr(_code_ptr[ip + 3]) + " = cont->iter_get(*ctr, valid); }\n";
 			ip += 5;
@@ -1128,6 +1277,60 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				return "OPCODE_" + itos((int)op);
 			}
 		}
+
+		// --- Forward local-type dataflow: reflect this instruction's write in `live`. ---
+		if (op == OPCODE_ASSIGN_TYPED_SCRIPT) {
+			const int d = _code_ptr[ip0 + 1], tc = _code_ptr[ip0 + 3];
+			if ((d >> ADDR_BITS) == ADDR_TYPE_STACK) {
+				GDScript *c = ((tc >> ADDR_BITS) == ADDR_TYPE_CONSTANT) ? Object::cast_to<GDScript>(get_constant(tc & ADDR_MASK).operator Object *()) : nullptr;
+				if (c) {
+					live[d & ADDR_MASK] = c;
+				} else {
+					live.erase(d & ADDR_MASK);
+				}
+			}
+		} else if (op == OPCODE_ASSIGN) {
+			const int d = _code_ptr[ip0 + 1];
+			if ((d >> ADDR_BITS) == ADDR_TYPE_STACK) {
+				const GDScript *sc = _operand_class(_code_ptr[ip0 + 2]);
+				if (sc) {
+					live[d & ADDR_MASK] = sc;
+				} else {
+					live.erase(d & ADDR_MASK);
+				}
+			}
+		} else if (op == OPCODE_CALL_RETURN || op == OPCODE_CALL_METHOD_BIND_RET) {
+			// `c := SomeClass.new()` compiles to CALL_METHOD_BIND_RET("new") on the class
+			// constant; the result then holds that class. Propagate it to the dst slot.
+			const int iac = _code_ptr[ip0 + 1];
+			const int argc = _code_ptr[ip0 + 2 + iac];
+			const int base = _code_ptr[ip0 + 2 + argc];
+			const int ret = _code_ptr[ip0 + 3 + argc];
+			if ((ret >> ADDR_BITS) == ADDR_TYPE_STACK) {
+				GDScript *c = ((base >> ADDR_BITS) == ADDR_TYPE_CONSTANT) ? Object::cast_to<GDScript>(get_constant(base & ADDR_MASK).operator Object *()) : nullptr;
+				bool is_new = false;
+				if (c) {
+					if (op == OPCODE_CALL_RETURN) {
+						is_new = (String(get_global_name(_code_ptr[ip0 + 3 + iac])) == "new");
+					} else {
+						MethodBind *mb = gds2cpp_method(_code_ptr[ip0 + 3 + iac]);
+						is_new = (mb && mb->get_name() == StringName("new"));
+					}
+				}
+				if (is_new) {
+					live[ret & ADDR_MASK] = c;
+				} else {
+					live.erase(ret & ADDR_MASK);
+				}
+			}
+		} else {
+			const int d = _dst_stack_slot(_code_ptr, ip0);
+			if (d == -2) {
+				live.clear();
+			} else if (d >= 0) {
+				live.erase(d);
+			}
+		}
 	}
 	// Naming/type context is only consulted during pass 2; drop it now.
 	s_member_names = nullptr;
@@ -1142,6 +1345,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_stats = nullptr;
 	s_member_classes = nullptr;
 	s_resolver = nullptr;
+	s_live_classes = nullptr;
 	s_slot_classes.clear();
 
 	// --- Assemble the function. ---

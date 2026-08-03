@@ -138,3 +138,19 @@ func t_assert(a: int) -> int:
 	return a * 2
 func t_string_ops(s: String) -> String:
 	return s.substr(0, 1).to_upper() + s.substr(1)
+
+# --- static vars / typed dict / validated method bind / native static ---
+static var s_counter: int = 100
+func t_static_get() -> int: return s_counter
+func t_static_set(v: int) -> int:
+	s_counter = v
+	return s_counter
+func t_typed_dict2() -> Dictionary:
+	var d: Dictionary[int, String] = {1: "one", 2: "two"}
+	return d
+func t_method_bind_validated() -> int:
+	var r := RefCounted.new()
+	return r.get_reference_count()
+func t_native_static() -> bool:
+	var re := RegEx.create_from_string("[0-9]+")
+	return re.is_valid()

@@ -1978,6 +1978,156 @@ Variant OpTest_gen::t_string_ops(GDScriptInstance *inst, GDScriptFunction *gf, c
 	return Variant();
 }
 
+// ----------------------------------------------------------------------------
+// func t_static_get() -> int: return s_counter
+// ----------------------------------------------------------------------------
+Variant OpTest_gen::t_static_get(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+	Variant s[4];
+	s[0] = inst ? Variant(inst->get_owner()) : Variant();
+	for (int i = 0; i < 0 && i < p_argc; i++) {
+		s[3 + i] = *p_args[i];
+	}
+	{
+		Callable::CallError _ce;
+		Variant::construct((Variant::Type)2, s[3], nullptr, 0, _ce);
+	}
+	Variant &t3 = s[3]; // temp
+	// func t_static_get() -> int: return s_counter
+	*(&t3) = Object::cast_to<GDScript>(gf->gds2cpp_constant_ptr(0)->operator Object *())->gds2cpp_static_get(0);
+	return *(&t3);
+	return Variant();
+}
+
+// ----------------------------------------------------------------------------
+// func t_static_set(v: int) -> int:
+// 	s_counter = v
+// 	return s_counter
+// ----------------------------------------------------------------------------
+Variant OpTest_gen::t_static_set(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+	Variant s[5];
+	s[0] = inst ? Variant(inst->get_owner()) : Variant();
+	for (int i = 0; i < 1 && i < p_argc; i++) {
+		s[3 + i] = *p_args[i];
+	}
+	{
+		Callable::CallError _ce;
+		Variant::construct((Variant::Type)2, s[4], nullptr, 0, _ce);
+	}
+	Variant &v = s[3]; // arg
+	Variant &t4 = s[4]; // temp
+	// s_counter = v
+	*(&t4) = *(&v);
+	Object::cast_to<GDScript>(gf->gds2cpp_constant_ptr(0)->operator Object *())->gds2cpp_static_set(0, *(&t4));
+	// return s_counter
+	*(&t4) = Object::cast_to<GDScript>(gf->gds2cpp_constant_ptr(0)->operator Object *())->gds2cpp_static_get(0);
+	return *(&t4);
+	return Variant();
+}
+
+// ----------------------------------------------------------------------------
+// func t_typed_dict2() -> Dictionary:
+// 	var d: Dictionary[int, String] = {1: "one", 2: "two"}
+// 	return d
+// ----------------------------------------------------------------------------
+Variant OpTest_gen::t_typed_dict2(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+	Variant s[5];
+	s[0] = inst ? Variant(inst->get_owner()) : Variant();
+	for (int i = 0; i < 0 && i < p_argc; i++) {
+		s[3 + i] = *p_args[i];
+	}
+	enum { GN__ = 0 }; // ""
+	Variant &d_ = s[3]; // local
+	Variant &t4 = s[4]; // temp
+	// var d: Dictionary[int, String] = {1: "one", 2: "two"}
+	{
+		Dictionary _d;
+		_d.set_typed((uint32_t)2, gf->get_global_name(GN__), *gf->gds2cpp_constant_ptr(4), (uint32_t)4, gf->get_global_name(GN__), *gf->gds2cpp_constant_ptr(4));
+		_d[*gf->gds2cpp_constant_ptr(0)] = *gf->gds2cpp_constant_ptr(1);
+		_d[*gf->gds2cpp_constant_ptr(2)] = *gf->gds2cpp_constant_ptr(3);
+		*(&t4) = _d;
+	}
+	*(&d_) = *(&t4);
+	// return d
+	return *(&d_);
+	return Variant();
+}
+
+// ----------------------------------------------------------------------------
+// func t_method_bind_validated() -> int:
+// 	var r := RefCounted.new()
+// 	return r.get_reference_count()
+// ----------------------------------------------------------------------------
+Variant OpTest_gen::t_method_bind_validated(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+	Variant s[6];
+	s[0] = inst ? Variant(inst->get_owner()) : Variant();
+	for (int i = 0; i < 0 && i < p_argc; i++) {
+		s[3 + i] = *p_args[i];
+	}
+	{
+		Callable::CallError _ce;
+		Variant::construct((Variant::Type)2, s[5], nullptr, 0, _ce);
+	}
+	enum { GN_new = 0 }; // "new"
+	Variant &r = s[3]; // local
+	Variant &t4 = s[4]; // temp
+	Variant &t5 = s[5]; // temp
+	// var r := RefCounted.new()
+	{
+		Variant cret;
+		Callable::CallError ce;
+		gf->gds2cpp_constant_ptr(0)->callp(gf->get_global_name(GN_new), nullptr, 0, cret, ce);
+		*(&t4) = cret;
+	}
+	*(&r) = *(&t4);
+	*(&t4) = Variant();
+	// return r.get_reference_count()
+	{
+		Object *_o = (&r)->operator Object *();
+		Callable::CallError _ce;
+		Variant _r = gf->gds2cpp_method(0)->call(_o, nullptr, 0, _ce);
+		*(&t5) = _r;
+	}
+	return *(&t5);
+	return Variant();
+}
+
+// ----------------------------------------------------------------------------
+// func t_native_static() -> bool:
+// 	var re := RegEx.create_from_string("[0-9]+")
+// 	return re.is_valid()
+// ----------------------------------------------------------------------------
+Variant OpTest_gen::t_native_static(GDScriptInstance *inst, GDScriptFunction *gf, const Variant **p_args, int p_argc) {
+	Variant s[6];
+	s[0] = inst ? Variant(inst->get_owner()) : Variant();
+	for (int i = 0; i < 0 && i < p_argc; i++) {
+		s[3 + i] = *p_args[i];
+	}
+	{
+		Callable::CallError _ce;
+		Variant::construct((Variant::Type)1, s[5], nullptr, 0, _ce);
+	}
+	Variant &re = s[3]; // local
+	Variant &t4 = s[4]; // temp
+	Variant &t5 = s[5]; // temp
+	// var re := RegEx.create_from_string("[0-9]+")
+	{
+		const Variant *ca[] = { gf->gds2cpp_constant_ptr(0) };
+		Callable::CallError _ce;
+		*(&t4) = gf->gds2cpp_method(0)->call(nullptr, ca, 1, _ce);
+	}
+	*(&re) = *(&t4);
+	*(&t4) = Variant();
+	// return re.is_valid()
+	{
+		Object *_o = (&re)->operator Object *();
+		Callable::CallError _ce;
+		Variant _r = gf->gds2cpp_method(1)->call(_o, nullptr, 0, _ce);
+		*(&t5) = _r;
+	}
+	return *(&t5);
+	return Variant();
+}
+
 OpTest_gen::Fn OpTest_gen::lookup(const StringName &p_name) {
 	if (p_name == StringName("t_op_add")) {
 		return &OpTest_gen::t_op_add;
@@ -2146,6 +2296,21 @@ OpTest_gen::Fn OpTest_gen::lookup(const StringName &p_name) {
 	}
 	if (p_name == StringName("t_string_ops")) {
 		return &OpTest_gen::t_string_ops;
+	}
+	if (p_name == StringName("t_static_get")) {
+		return &OpTest_gen::t_static_get;
+	}
+	if (p_name == StringName("t_static_set")) {
+		return &OpTest_gen::t_static_set;
+	}
+	if (p_name == StringName("t_typed_dict2")) {
+		return &OpTest_gen::t_typed_dict2;
+	}
+	if (p_name == StringName("t_method_bind_validated")) {
+		return &OpTest_gen::t_method_bind_validated;
+	}
+	if (p_name == StringName("t_native_static")) {
+		return &OpTest_gen::t_native_static;
 	}
 	return nullptr;
 }

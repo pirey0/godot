@@ -178,6 +178,9 @@ static int _instr_size(const int *p_code, int p_ip) {
 		case GDScriptFunction::OPCODE_ASSIGN_TYPED_NATIVE:
 		case GDScriptFunction::OPCODE_ASSIGN_TYPED_SCRIPT:
 			return 4;
+		case GDScriptFunction::OPCODE_GET_STATIC_VARIABLE:
+		case GDScriptFunction::OPCODE_SET_STATIC_VARIABLE:
+			return 4;
 		case GDScriptFunction::OPCODE_GET_INDEXED_VALIDATED:
 		case GDScriptFunction::OPCODE_SET_INDEXED_VALIDATED:
 		case GDScriptFunction::OPCODE_RETURN_TYPED_ARRAY:
@@ -213,11 +216,18 @@ static int _instr_size(const int *p_code, int p_ip) {
 		case GDScriptFunction::OPCODE_CALL_GDSCRIPT_UTILITY:
 		case GDScriptFunction::OPCODE_CALL_METHOD_BIND:
 		case GDScriptFunction::OPCODE_CALL_METHOD_BIND_RET:
+		case GDScriptFunction::OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN:
+		case GDScriptFunction::OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN:
+		case GDScriptFunction::OPCODE_CALL_NATIVE_STATIC:
+		case GDScriptFunction::OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN:
+		case GDScriptFunction::OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN:
 		case GDScriptFunction::OPCODE_CONSTRUCT_VALIDATED:
 			return p_code[p_ip + 1] + 4;
 		case GDScriptFunction::OPCODE_CALL_BUILTIN_STATIC:
 		case GDScriptFunction::OPCODE_CONSTRUCT_TYPED_ARRAY:
 			return p_code[p_ip + 1] + 5;
+		case GDScriptFunction::OPCODE_CONSTRUCT_TYPED_DICTIONARY:
+			return p_code[p_ip + 1] + 7;
 		case GDScriptFunction::OPCODE_CONSTRUCT_DICTIONARY:
 		case GDScriptFunction::OPCODE_CONSTRUCT_ARRAY:
 			return p_code[p_ip + 1] + 3;
@@ -812,6 +822,89 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			case OPCODE_ASSIGN_TYPED_DICTIONARY: {
 				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = *" + _addr(_code_ptr[ip + 2]) + ";\n";
 				ip += 9;
+			} break;
+			case OPCODE_GET_STATIC_VARIABLE: {
+				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = Object::cast_to<GDScript>(" + _addr(_code_ptr[ip + 2]) + "->operator Object *())->gds2cpp_static_get(" + itos(_code_ptr[ip + 3]) + ");\n";
+				ip += 4;
+			} break;
+			case OPCODE_SET_STATIC_VARIABLE: {
+				b += "\tObject::cast_to<GDScript>(" + _addr(_code_ptr[ip + 2]) + "->operator Object *())->gds2cpp_static_set(" + itos(_code_ptr[ip + 3]) + ", *" + _addr(_code_ptr[ip + 1]) + ");\n";
+				ip += 4;
+			} break;
+			case OPCODE_CALL_NATIVE_STATIC: {
+				const int iac = _code_ptr[ip + 1];
+				const int method_idx = _code_ptr[ip + 2 + iac];
+				const int argc = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tCallable::CallError _ce; *" + _addr(_code_ptr[ip + 2 + argc]) + " = gf->gds2cpp_method(" + itos(method_idx) + ")->call(nullptr, " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN:
+			case OPCODE_CALL_NATIVE_STATIC_VALIDATED_NO_RETURN: {
+				const bool ret = (op == OPCODE_CALL_NATIVE_STATIC_VALIDATED_RETURN);
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int method_idx = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tCallable::CallError _ce; Variant _r = gf->gds2cpp_method(" + itos(method_idx) + ")->call(nullptr, " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				if (ret) {
+					b += "\t\t*" + _addr(_code_ptr[ip + 2 + argc]) + " = _r;\n";
+				}
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN:
+			case OPCODE_CALL_METHOD_BIND_VALIDATED_NO_RETURN: {
+				const bool ret = (op == OPCODE_CALL_METHOD_BIND_VALIDATED_RETURN);
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int method_idx = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tObject *_o = " + _addr(_code_ptr[ip + 2 + argc]) + "->operator Object *();\n";
+				b += "\t\tCallable::CallError _ce; Variant _r = gf->gds2cpp_method(" + itos(method_idx) + ")->call(_o, " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				if (ret) {
+					b += "\t\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = _r;\n";
+				}
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CONSTRUCT_TYPED_DICTIONARY: {
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int kt = _code_ptr[ip + 3 + iac];
+				const int kn = _code_ptr[ip + 4 + iac];
+				const int vt = _code_ptr[ip + 5 + iac];
+				const int vn = _code_ptr[ip + 6 + iac];
+				b += "\t{\n";
+				b += "\t\tDictionary _d; _d.set_typed((uint32_t)" + itos(kt) + ", " + _gname(kn) + ", *" + _addr(_code_ptr[ip + 2 + argc * 2 + 1]) + ", (uint32_t)" + itos(vt) + ", " + _gname(vn) + ", *" + _addr(_code_ptr[ip + 2 + argc * 2 + 2]) + ");\n";
+				for (int i = 0; i < argc; i++) {
+					b += "\t\t_d[*" + _addr(_code_ptr[ip + 2 + i * 2]) + "] = *" + _addr(_code_ptr[ip + 2 + i * 2 + 1]) + ";\n";
+				}
+				b += "\t\t*" + _addr(_code_ptr[ip + 2 + argc * 2]) + " = _d;\n";
+				b += "\t}\n";
+				ip += iac + 7;
 			} break;
 			default: {
 				r_ok = false;

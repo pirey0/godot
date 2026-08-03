@@ -273,6 +273,10 @@ public:
 	bool is_abstract() const override { return _is_abstract; }
 	Ref<GDScript> get_base() const;
 
+	// gds2cpp: static variable access for transpiled code.
+	_FORCE_INLINE_ Variant gds2cpp_static_get(int p_idx) const { return static_variables[p_idx]; }
+	_FORCE_INLINE_ void gds2cpp_static_set(int p_idx, const Variant &p_v) { static_variables.write[p_idx] = p_v; }
+
 	const HashMap<StringName, MemberInfo> &debug_get_member_indices() const { return member_indices; }
 	const HashMap<StringName, GDScriptFunction *> &debug_get_member_functions() const; //this is debug only
 	StringName debug_get_member_by_index(int p_idx) const;

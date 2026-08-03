@@ -600,7 +600,7 @@ public:
 	StringName get_global_name(int p_idx) const;
 
 	// gds2cpp: stable pointer to a constant, for transpiled function bodies.
-	_FORCE_INLINE_ const Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant *gds2cpp_constant_ptr(int p_idx) const { return &_constants_ptr[p_idx]; }
 	// gds2cpp: runtime dispatch tables, for transpiled function bodies.
 	_FORCE_INLINE_ Variant::ValidatedOperatorEvaluator gds2cpp_operator_func(int p_idx) const { return _operator_funcs_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedKeyedGetter gds2cpp_keyed_getter(int p_idx) const { return _keyed_getters_ptr[p_idx]; }

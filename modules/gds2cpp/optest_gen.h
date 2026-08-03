@@ -94,4 +94,9 @@ struct OpTest_gen {
 	static Variant t_ret_dict(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
 	static Variant t_assert(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
 	static Variant t_string_ops(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant t_static_get(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant t_static_set(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant t_typed_dict2(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant t_method_bind_validated(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant t_native_static(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
 };

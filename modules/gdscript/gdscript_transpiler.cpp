@@ -151,6 +151,9 @@ static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_re
 // specific parent implementation, which is always overridden by the caller, so it's absent
 // from s_resolver by construction.
 static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_super_targets = nullptr;
+// Whole-program method-name -> every class's C++ target for it, for guarded speculative devirt of
+// otherwise-dynamic by-name calls (the receiver type is unknown, so a runtime script guard selects).
+static const HashMap<StringName, Vector<Gds2cppTarget>> *s_by_name = nullptr;
 static const HashMap<int, const GDScript *> *s_live_classes = nullptr; // live local slot -> class (per point)
 
 // GDScript class held by an operand (STACK arg/local or MEMBER), or nullptr if unknown.
@@ -585,7 +588,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -673,6 +676,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_member_classes = &p_member_classes;
 	s_resolver = &p_resolver;
 	s_super_targets = p_super_targets;
+	s_by_name = p_by_name;
 	// Receiver classes for typed GDScript arguments (slot 3+i).
 	s_slot_classes.clear();
 	for (int i = 0; i < _argument_count && i < argument_types.size(); i++) {
@@ -1064,25 +1068,58 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					}
 				}
 
+				// The receiver type is unknown to GDScript, but the whole-program map tells us which
+				// classes define this method name. For a small candidate set, emit a speculative
+				// direct call guarded by the receiver's actual script -- exact-script match is sound
+				// (a subclass, even one that inherits the method, misses and falls back to callp),
+				// cheap on a miss (a few pointer compares), and skips the by-name hash on a hit.
+				const Vector<Gds2cppTarget> *cands = (s_by_name && s_by_name->has(mname)) ? &(*s_by_name)[mname] : nullptr;
+				const int nc = cands ? cands->size() : 0;
 				if (s_stats) {
 					s_stats->dynamic_calls++;
+					if (nc == 0) {
+						s_stats->dyn_none++;
+					} else if (nc == 1) {
+						s_stats->dyn_uniq++;
+					} else if (nc <= 3) {
+						s_stats->dyn_few++;
+					} else {
+						s_stats->dyn_many++;
+					}
 				}
+				const String args = argc > 0 ? "ca" : "nullptr";
+				const String dst = ret ? _addr(_code_ptr[ip + 3 + argc]) : String();
 				b += "\t{\n";
 				if (argc > 0) {
 					b += "\t\tconst Variant *ca[] = { ";
 					for (int i = 0; i < argc; i++) {
-						if (i) {
-							b += ", ";
-						}
-						b += _addr(_code_ptr[ip + 2 + i]);
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
 					}
 					b += " };\n";
 				}
-				b += "\t\tVariant cret; Callable::CallError ce;\n";
-				b += "\t\t" + _addr(base_addr) + "->callp(" + _gname(methodname_idx) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", cret, ce);\n";
-				if (ret) {
-					const int target_addr = _code_ptr[ip + 3 + argc];
-					b += "\t\t*" + _addr(target_addr) + " = cret;\n";
+				if (nc >= 1 && nc <= 3) {
+					if (s_stats) {
+						s_stats->pic_calls++;
+					}
+					b += "\t\tObject *_o = " + _addr(base_addr) + "->operator Object *();\n";
+					b += "\t\tScriptInstance *_psi = _o ? _o->get_script_instance() : nullptr;\n";
+					b += "\t\tGDScript *_sc = (_psi && _psi->get_language() == GDScriptLanguage::get_singleton()) ? static_cast<GDScriptInstance *>(_psi)->gds2cpp_script_ptr() : nullptr;\n";
+					for (int ci = 0; ci < cands->size(); ci++) {
+						const Gds2cppTarget &cand = (*cands)[ci];
+						const String call = cand.class_cpp + "::" + cand.fn_cpp + "(static_cast<GDScriptInstance *>(_psi), " + cand.class_cpp + "::g_gf[" + itos(cand.gf_index) + "], " + args + ", " + itos(argc) + ")";
+						b += "\t\tif (_sc && _sc == " + cand.class_cpp + "::g_script) { " + (ret ? ("*" + dst + " = ") : String()) + call + "; } else ";
+					}
+					b += "{ Variant cret; Callable::CallError ce; " + _addr(base_addr) + "->callp(" + _gname(methodname_idx) + ", " + args + ", " + itos(argc) + ", cret, ce);";
+					if (ret) {
+						b += " *" + dst + " = cret;";
+					}
+					b += " }\n";
+				} else {
+					b += "\t\tVariant cret; Callable::CallError ce;\n";
+					b += "\t\t" + _addr(base_addr) + "->callp(" + _gname(methodname_idx) + ", " + args + ", " + itos(argc) + ", cret, ce);\n";
+					if (ret) {
+						b += "\t\t*" + dst + " = cret;\n";
+					}
 				}
 				b += "\t}\n";
 				ip += iac + 4;
@@ -1729,6 +1766,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_member_classes = nullptr;
 	s_resolver = nullptr;
 	s_super_targets = nullptr;
+	s_by_name = nullptr;
 	s_live_classes = nullptr;
 	s_slot_classes.clear();
 

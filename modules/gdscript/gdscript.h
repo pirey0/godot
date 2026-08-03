@@ -379,6 +379,8 @@ public:
 
 	// gds2cpp: direct by-index access for transpiled (AOT) function bodies.
 	_FORCE_INLINE_ Variant *gds2cpp_member_ptr(int p_idx) { return &members.write[p_idx]; }
+	// gds2cpp: raw owning-script pointer, for the runtime script guard of speculative devirt.
+	_FORCE_INLINE_ GDScript *gds2cpp_script_ptr() const { return script.ptr(); }
 
 	virtual bool set(const StringName &p_name, const Variant &p_value);
 	virtual bool get(const StringName &p_name, Variant &r_ret) const;

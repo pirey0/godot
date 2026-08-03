@@ -250,7 +250,7 @@ static void _collect_lambdas(const String &p_root_key, int p_root_implicit, GDSc
 	}
 }
 
-static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr) {
+static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_super_targets = nullptr, const HashMap<StringName, Vector<Gds2cppTarget>> *p_by_name = nullptr) {
 	const String p_path = gds->get_path();
 	const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &resolver = p_resolver ? *p_resolver : _no_resolver;
 	Vector<String> src_lines = _load_source_lines(p_path);
@@ -275,7 +275,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	String bodies;
 	for (int i = 0; i < ok.size(); i++) {
 		bool okv = false;
-		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets) + "\n";
+		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name) + "\n";
 	}
 
 	// Pass B (lambdas): transpile each transpilable nested lambda body with the SAME class
@@ -293,7 +293,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	Vector<LamFn> ok_lams;
 	for (const LamFn &L : lams) {
 		bool okv = false;
-		String body = L.fn->transpile_to_cpp(cls, L.cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets);
+		String body = L.fn->transpile_to_cpp(cls, L.cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats, p_super_targets, p_by_name);
 		if (okv) {
 			bodies += body + "\n";
 			ok_lams.push_back(L);
@@ -313,6 +313,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	h += "\ttypedef Variant (*Fn)(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
 	h += "\tstatic Fn lookup(const StringName &p_name);\n";
 	h += "\tstatic GDScriptFunction *g_gf[" + itos(N) + "]; // per-method GDScriptFunction, for devirt calls\n";
+	h += "\tstatic GDScript *g_script; // owning script, for the runtime guard of speculative devirt\n";
 	h += "\tstatic void bind(GDScript *p_script); // populate g_gf from the owning script\n";
 	for (const OkFn &n : ok) {
 		h += "\tstatic Variant " + n.cpp + "(GDScriptInstance *, GDScriptFunction *, const Variant **, int);\n";
@@ -346,7 +347,9 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	}
 	c += "#define GF(m) g_gf[GF_##m]\n";
 	c += "GDScriptFunction *" + cls + "::g_gf[" + itos(N) + "] = {};\n";
+	c += "GDScript *" + cls + "::g_script = nullptr;\n";
 	c += "void " + cls + "::bind(GDScript *p_script) {\n";
+	c += "\tg_script = p_script;\n";
 	c += "\tconst HashMap<StringName, GDScriptFunction *> &fns = p_script->get_member_functions();\n";
 	for (int i = 0; i < ok.size(); i++) {
 		// Fill the g_gf devirt table AND install the transpiled body on the live
@@ -447,6 +450,8 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> resolver;
 	// Unfiltered variant (includes overridden methods) for resolving super.method() targets.
 	HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> super_targets;
+	// method name -> every class's target for it (guarded-devirt candidates for dynamic calls).
+	HashMap<StringName, Vector<Gds2cppTarget>> by_name;
 	for (const Cls &c : classes) {
 		HashSet<StringName> eligible;
 		for (const KeyValue<StringName, GDScriptFunction *> &E : c.gds->get_member_functions()) {
@@ -478,9 +483,13 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		Vector<OkFn> ok = _pass_a(c.gds, c.cpp);
 		for (int i = 0; i < ok.size(); i++) {
 			const StringName key = StringName(ok[i].orig);
-			super_targets[c.gds.ptr()][key] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
+			const Gds2cppTarget tgt{ c.cpp, ok[i].cpp, i };
+			super_targets[c.gds.ptr()][key] = tgt;
+			if (ok[i].implicit == 0) {
+				by_name[key].push_back(tgt); // real member methods only (not @implicit_new)
+			}
 			if (eligible.has(key)) {
-				resolver[c.gds.ptr()][key] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
+				resolver[c.gds.ptr()][key] = tgt;
 			}
 		}
 	}
@@ -488,7 +497,7 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	// EMIT with cross-class direct calls resolved against the whole program.
 	String includes, bind_body;
 	for (const Cls &c : classes) {
-		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver, &super_targets);
+		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver, &super_targets, &by_name);
 		includes += "#include \"" + c.cpp + ".h\"\n";
 		bind_body += "\t{ Ref<GDScript> g = ResourceLoader::load(\"" + c.path + "\"); if (g.is_valid()) " + c.cpp + "::bind(g.ptr()); }\n";
 	}
@@ -530,6 +539,14 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	}
 	if (stats.native_ops > 0) {
 		r += vformat("  native scalar ops (inlined, no dispatch): %d\n", stats.native_ops);
+	}
+	const int dyn_total = stats.dyn_uniq + stats.dyn_few + stats.dyn_many + stats.dyn_none;
+	if (dyn_total > 0) {
+		r += vformat("  dynamic-call candidates (guarded-devirt opportunity): %d unique class, %d few(2-3), %d many(4+), %d native-only(0)\n",
+				stats.dyn_uniq, stats.dyn_few, stats.dyn_many, stats.dyn_none);
+		r += vformat("    => %.1f%% of dynamic calls have <=3 candidate classes (guardable)\n",
+				dyn_total ? 100.0 * (stats.dyn_uniq + stats.dyn_few) / dyn_total : 0.0);
+		r += vformat("  guarded speculative devirt emitted: %d sites\n", stats.pic_calls);
 	}
 	return r;
 }

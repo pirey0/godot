@@ -116,6 +116,7 @@ static const HashMap<int, Variant::Type> *s_slot_types = nullptr; // stack idx -
 static const HashMap<int, Variant::Type> *s_member_types = nullptr; // member idx -> declared builtin type
 static const HashMap<StringName, Pair<int, String>> *s_self_methods = nullptr; // devirt-eligible self methods
 static String s_cpp_class; // owning class C++ name (for direct calls to g_gf/fn_)
+static Gds2cppStats *s_stats = nullptr; // optional per-call-site outcome tally
 
 // Statically-known builtin Variant::Type of an operand, or NIL if unknown.
 static Variant::Type _operand_type(int p_addr) {
@@ -345,7 +346,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok, Gds2cppStats *r_stats) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -427,6 +428,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_member_types = &p_member_types;
 	s_self_methods = &p_self_methods;
 	s_cpp_class = p_cpp_class;
+	s_stats = r_stats;
 
 	// --- Pass 2: emit the C++ body. ---
 	String b; // body
@@ -541,6 +543,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					native = _native_builtin_expr(bt, String(get_global_name(methodname_idx)), argc, _addr(base_addr), aexpr);
 				}
 				if (!native.is_empty()) {
+					if (s_stats) {
+						s_stats->native_calls++;
+					}
 					if (ret) {
 						b += "\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = " + native + "; // native " + String(get_global_name(methodname_idx)) + "\n";
 					} else {
@@ -554,6 +559,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				const bool is_self = ((base_addr >> ADDR_BITS) == ADDR_TYPE_STACK) && ((base_addr & ADDR_MASK) == ADDR_STACK_SELF);
 				const StringName mname = get_global_name(methodname_idx);
 				if (is_self && s_self_methods && s_self_methods->has(mname)) {
+					if (s_stats) {
+						s_stats->devirt_calls++;
+					}
 					const Pair<int, String> &tgt = (*s_self_methods)[mname];
 					String ca;
 					if (argc > 0) {
@@ -576,6 +584,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					break;
 				}
 
+				if (s_stats) {
+					s_stats->dynamic_calls++;
+				}
 				b += "\t{\n";
 				if (argc > 0) {
 					b += "\t\tconst Variant *ca[] = { ";
@@ -664,6 +675,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += iac + 3;
 			} break;
 			case OPCODE_CALL_BUILTIN_TYPE_VALIDATED: {
+				if (s_stats) {
+					s_stats->validated_calls++;
+				}
 				const int iac = _code_ptr[ip + 1];
 				const int argc = _code_ptr[ip + 2 + iac];
 				const int method_idx = _code_ptr[ip + 3 + iac];
@@ -1066,6 +1080,7 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_slot_types = nullptr;
 	s_member_types = nullptr;
 	s_self_methods = nullptr;
+	s_stats = nullptr;
 
 	// --- Assemble the function. ---
 	String out;

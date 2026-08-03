@@ -165,7 +165,7 @@ String Gds2cppTool::transpile_script(const String &p_path, const String &p_cpp_c
 // Emit a compilable <file_base>.{h,cpp} (struct <cls>) for one script. Self-calls to
 // methods in p_eligible are devirtualized to direct C++ calls; nullptr means all own
 // methods are eligible (safe only when the class has no overriding subclass).
-static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible) {
+static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr) {
 	const String p_path = gds->get_path();
 	Vector<String> src_lines = _load_source_lines(p_path);
 	String member_block;
@@ -204,11 +204,11 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 		}
 	}
 
-	// Pass B: transpile with devirtualized self-calls.
+	// Pass B: transpile with devirtualized self-calls (accumulate call-outcome stats).
 	String bodies;
 	for (int i = 0; i < ok.size(); i++) {
 		bool okv = false;
-		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, okv) + "\n";
+		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, okv, r_stats) + "\n";
 	}
 
 	const int N = MAX(ok.size(), 1);
@@ -320,6 +320,7 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	}
 
 	int total_methods = 0, total_eligible = 0;
+	Gds2cppStats stats;
 	String includes, bind_body;
 	for (const Cls &c : classes) {
 		// eligible = own methods with no override in any descendant.
@@ -349,7 +350,7 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 				total_eligible++;
 			}
 		}
-		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible);
+		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible, &stats);
 		includes += "#include \"" + c.cpp + ".h\"\n";
 		bind_body += "\t{ Ref<GDScript> g = ResourceLoader::load(\"" + c.path + "\"); if (g.is_valid()) " + c.cpp + "::bind(g.ptr()); }\n";
 	}
@@ -368,8 +369,22 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		fc->close();
 	}
 
-	return vformat("classes: %d, methods: %d, devirt-eligible: %d (%.1f%%)",
+	// By-name method calls: how many became native / direct vs stayed dynamic.
+	const int byname = stats.native_calls + stats.devirt_calls + stats.dynamic_calls;
+	const int all_calls = byname + stats.validated_calls;
+	String r = vformat("classes: %d, methods: %d, devirt-eligible: %d (%.1f%%)\n",
 			classes.size(), total_methods, total_eligible, total_methods ? 100.0 * total_eligible / total_methods : 0.0);
+	r += vformat("call sites: %d total (%d by-name + %d already-validated-builtin)\n", all_calls, byname, stats.validated_calls);
+	r += vformat("  native (by-name -> native builtin): %d (%.1f%% of by-name, %.1f%% of all)\n",
+			stats.native_calls, byname ? 100.0 * stats.native_calls / byname : 0.0, all_calls ? 100.0 * stats.native_calls / all_calls : 0.0);
+	r += vformat("  devirt (self-call -> direct C++):   %d (%.1f%% of by-name, %.1f%% of all)\n",
+			stats.devirt_calls, byname ? 100.0 * stats.devirt_calls / byname : 0.0, all_calls ? 100.0 * stats.devirt_calls / all_calls : 0.0);
+	r += vformat("  dynamic (callp fallback):           %d (%.1f%% of by-name, %.1f%% of all)\n",
+			stats.dynamic_calls, byname ? 100.0 * stats.dynamic_calls / byname : 0.0, all_calls ? 100.0 * stats.dynamic_calls / all_calls : 0.0);
+	const int specialized = stats.native_calls + stats.devirt_calls + stats.validated_calls;
+	r += vformat("  => %.1f%% of all call sites go through pure C++ (native+devirt+validated)\n",
+			all_calls ? 100.0 * specialized / all_calls : 0.0);
+	return r;
 }
 
 // Whole-program collect + override analysis: how much devirtualization is safe?

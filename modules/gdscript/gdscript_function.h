@@ -260,6 +260,14 @@ public:
 	~GDScriptDataType() {}
 };
 
+// gds2cpp: per-call-site outcome tallies for a transpile run (specialization report).
+struct Gds2cppStats {
+	int native_calls = 0; // by-name method call lowered to a native builtin op
+	int devirt_calls = 0; // self-call routed to a direct C++ call
+	int dynamic_calls = 0; // by-name callp fallback (type/target unknown)
+	int validated_calls = 0; // CALL_BUILTIN_TYPE_VALIDATED (already type-resolved by GDScript)
+};
+
 class GDScriptFunction {
 public:
 	enum Opcode {
@@ -635,7 +643,7 @@ public:
 	// p_member_types: member index -> declared builtin Variant::Type (for native specialization).
 	// p_self_methods: this-class method name -> (g_gf index, C++ fn name) for devirt-eligible
 	//   self-calls (routed to a direct C++ call instead of dynamic callp). May be empty.
-	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok) const;
+	String transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok, Gds2cppStats *r_stats = nullptr) const;
 
 	Variant call(GDScriptInstance *p_instance, const Variant **p_args, int p_argcount, Callable::CallError &r_err, CallState *p_state = nullptr);
 	void debug_get_stack_member_state(int p_line, List<Pair<StringName, int>> *r_stackvars) const;

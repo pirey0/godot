@@ -192,10 +192,23 @@ static Variant::Type _operand_type(int p_addr) {
 static String _native_scalar_getter(Variant::Type t) {
 	return t == Variant::INT ? "get_int" : (t == Variant::FLOAT ? "get_float" : "get_bool");
 }
+static String _native_cpp_type(Variant::Type t) {
+	return t == Variant::INT ? "int64_t" : (t == Variant::FLOAT ? "double" : "bool");
+}
 static bool _is_scalar_type(Variant::Type t) {
 	return t == Variant::INT || t == Variant::FLOAT || t == Variant::BOOL;
 }
-static String _native_operator(Variant::ValidatedOperatorEvaluator p_eval, int p_a, int p_b, int p_dst) {
+
+// A recovered scalar operator: the C++ op token plus the exact operand/result types, identified by
+// matching the stored evaluator pointer (each (op, at, bt) is a distinct template instantiation, so
+// the match is unique and authoritative -- no reliance on the type oracle, and a non-match is simply
+// "not a safe scalar op").
+struct ScalarOp {
+	bool ok = false;
+	const char *cpp = nullptr;
+	Variant::Type at = Variant::NIL, bt = Variant::NIL, rt = Variant::NIL;
+};
+static ScalarOp _match_scalar_op(Variant::ValidatedOperatorEvaluator p_eval) {
 	struct OpMap {
 		Variant::Operator op;
 		const char *cpp;
@@ -207,10 +220,6 @@ static String _native_operator(Variant::ValidatedOperatorEvaluator p_eval, int p
 		{ Variant::OP_LESS, "<" }, { Variant::OP_LESS_EQUAL, "<=" },
 		{ Variant::OP_GREATER, ">" }, { Variant::OP_GREATER_EQUAL, ">=" }
 	};
-	// Recover (op, operand types) from the stored evaluator itself: each (op, at, bt) is a distinct
-	// template instantiation, so a pointer match uniquely identifies the operation AND the exact
-	// runtime operand types GDScript resolved (authoritative -- no reliance on the type oracle,
-	// and no risk of a wrong guess since a mismatch just falls through to dispatch).
 	static const Variant::Type scalars[] = { Variant::BOOL, Variant::INT, Variant::FLOAT };
 	for (const OpMap &m : ops) {
 		for (Variant::Type at : scalars) {
@@ -220,14 +229,34 @@ static String _native_operator(Variant::ValidatedOperatorEvaluator p_eval, int p
 				}
 				const Variant::Type rt = Variant::get_operator_return_type(m.op, at, bt);
 				if (!_is_scalar_type(rt)) {
-					return String();
+					return ScalarOp();
 				}
-				return "*VariantInternal::" + _native_scalar_getter(rt) + "(" + _addr(p_dst) + ") = *VariantInternal::" + _native_scalar_getter(at) + "(" + _addr(p_a) + ") " + String(m.cpp) + " *VariantInternal::" + _native_scalar_getter(bt) + "(" + _addr(p_b) + ");";
+				return ScalarOp{ true, m.cpp, at, bt, rt };
 			}
 		}
 	}
-	return String();
+	return ScalarOp();
 }
+
+// gds2cpp OPT-1 native locals: stack slots proven to hold a single scalar type for their whole
+// lifetime, in a function whose every opcode we lower natively -- represented as raw int64_t/double/
+// bool locals (n<idx>) with no Variant storage and no TYPE_ADJUST. Empty unless the function qualifies.
+static HashMap<int, Variant::Type> s_native_slots;
+
+// A native C++ lvalue/rvalue for the scalar value of Variant-type `t` at `p_addr`: the raw local for
+// a native slot, else a direct payload reference on the boxed Variant (identical to the dispatch path).
+static String _scalar_ref(int p_addr, Variant::Type t) {
+	const int idx = p_addr & GDScriptFunction::ADDR_MASK;
+	if ((p_addr >> GDScriptFunction::ADDR_BITS) == GDScriptFunction::ADDR_TYPE_STACK && s_native_slots.has(idx)) {
+		return "n" + itos(idx); // native local; classification guarantees its type == t
+	}
+	return "(*VariantInternal::" + _native_scalar_getter(t) + "(" + _addr(p_addr) + "))";
+}
+static bool _is_native_slot(int p_addr) {
+	return (p_addr >> GDScriptFunction::ADDR_BITS) == GDScriptFunction::ADDR_TYPE_STACK && s_native_slots.has(p_addr & GDScriptFunction::ADDR_MASK);
+}
+
+// Native C++ expression for a value-returning builtin method on a known-type base,
 
 // Native C++ expression for a value-returning builtin method on a known-type base,
 // or "" if not in the curated set (caller then falls back to dynamic dispatch).
@@ -719,6 +748,108 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 		}
 	}
 
+	// --- OPT-1 native-scalar classification (function-level gate). ---
+	// A function qualifies only if EVERY opcode is one we lower natively (pure scalar math -- no
+	// calls / members / containers), so no unhandled op can ever touch a native slot. In a qualifying
+	// function, non-arg stack slots proven to hold a single scalar type become raw int64_t/double/bool
+	// locals with no Variant storage and no TYPE_ADJUST.
+	s_native_slots.clear();
+	{
+		bool eligible = true;
+		HashMap<int, Variant::Type> cand;
+		HashSet<int> conflict;
+		auto observe = [&](int addr, Variant::Type t) {
+			if ((addr >> ADDR_BITS) != ADDR_TYPE_STACK) {
+				return;
+			}
+			const int idx = addr & ADDR_MASK;
+			if (idx < FIXED_ADDRESSES_MAX + _argument_count) {
+				return; // skip fixed slots (self/class/nil) + args in this first slice
+			}
+			if (!_is_scalar_type(t)) {
+				conflict.insert(idx);
+			} else if (cand.has(idx)) {
+				if (cand[idx] != t) {
+					conflict.insert(idx);
+				}
+			} else {
+				cand[idx] = t;
+			}
+		};
+		// Pass A: whole-function eligibility + observe scalar operand/result types.
+		for (int ip = 0; ip < _code_size && eligible;) {
+			const Opcode o = Opcode(_code_ptr[ip]);
+			if (o == OPCODE_END) {
+				break;
+			}
+			const int sz = _instr_size(_code_ptr, ip);
+			if (sz <= 0) {
+				eligible = false;
+				break;
+			}
+			switch (o) {
+				case OPCODE_LINE:
+				case OPCODE_JUMP:
+				case OPCODE_JUMP_IF:
+				case OPCODE_JUMP_IF_NOT:
+				case OPCODE_RETURN:
+				case OPCODE_RETURN_TYPED_BUILTIN:
+				case OPCODE_ASSIGN:
+					break; // handled, no new type info
+				case OPCODE_ASSIGN_TRUE:
+				case OPCODE_ASSIGN_FALSE:
+					observe(_code_ptr[ip + 1], Variant::BOOL);
+					break;
+				case OPCODE_OPERATOR_VALIDATED: {
+					const ScalarOp so = _match_scalar_op(_operator_funcs_ptr[_code_ptr[ip + 4]]);
+					if (!so.ok) {
+						eligible = false;
+						break;
+					}
+					observe(_code_ptr[ip + 1], so.at);
+					observe(_code_ptr[ip + 2], so.bt);
+					observe(_code_ptr[ip + 3], so.rt);
+				} break;
+				default:
+					eligible = false;
+					break;
+			}
+			ip += sz;
+		}
+		// Pass B: a native dst must be ASSIGNed only values provably of its own scalar type.
+		if (eligible) {
+			for (int ip = 0; ip < _code_size;) {
+				const Opcode o = Opcode(_code_ptr[ip]);
+				if (o == OPCODE_END) {
+					break;
+				}
+				const int sz = _instr_size(_code_ptr, ip);
+				if (o == OPCODE_ASSIGN) {
+					const int dst = _code_ptr[ip + 1], src = _code_ptr[ip + 2];
+					const int di = dst & ADDR_MASK;
+					if ((dst >> ADDR_BITS) == ADDR_TYPE_STACK && cand.has(di) && !conflict.has(di)) {
+						Variant::Type st;
+						const int si = src & ADDR_MASK;
+						if ((src >> ADDR_BITS) == ADDR_TYPE_STACK && cand.has(si) && !conflict.has(si)) {
+							st = cand[si];
+						} else {
+							st = _operand_type(src); // constant / member / typed temporary
+						}
+						if (st != cand[di]) {
+							conflict.insert(di);
+						}
+					}
+				}
+				ip += sz;
+			}
+			for (const KeyValue<int, Variant::Type> &E : cand) {
+				if (!conflict.has(E.key)) {
+					s_native_slots[E.key] = E.value;
+				}
+			}
+		}
+	}
+
 	// --- Pass 2: emit the C++ body. ---
 	// Live local-slot classes, cleared at every block boundary (conservative dataflow).
 	HashMap<int, const GDScript *> live;
@@ -794,7 +925,15 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 2;
 			} break;
 			case OPCODE_ASSIGN: {
-				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = *" + _addr(_code_ptr[ip + 2]) + ";\n";
+				const int dst = _code_ptr[ip + 1], src = _code_ptr[ip + 2];
+				if (_is_native_slot(dst)) {
+					// native dst: read src as the slot's type (native local or boxed payload).
+					b += "\tn" + itos(dst & ADDR_MASK) + " = " + _scalar_ref(src, s_native_slots[dst & ADDR_MASK]) + ";\n";
+				} else if (_is_native_slot(src)) {
+					b += "\t*" + _addr(dst) + " = Variant(n" + itos(src & ADDR_MASK) + ");\n"; // box on assign to boxed slot
+				} else {
+					b += "\t*" + _addr(dst) + " = *" + _addr(src) + ";\n";
+				}
 				ip += 3;
 			} break;
 			case OPCODE_ASSIGN_NULL: {
@@ -802,15 +941,18 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 2;
 			} break;
 			case OPCODE_ASSIGN_TRUE: {
-				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = true;\n";
+				const int dst = _code_ptr[ip + 1];
+				b += _is_native_slot(dst) ? ("\tn" + itos(dst & ADDR_MASK) + " = true;\n") : ("\t*" + _addr(dst) + " = true;\n");
 				ip += 2;
 			} break;
 			case OPCODE_ASSIGN_FALSE: {
-				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = false;\n";
+				const int dst = _code_ptr[ip + 1];
+				b += _is_native_slot(dst) ? ("\tn" + itos(dst & ADDR_MASK) + " = false;\n") : ("\t*" + _addr(dst) + " = false;\n");
 				ip += 2;
 			} break;
 			case OPCODE_RETURN: {
-				b += "\treturn *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				const int src = _code_ptr[ip + 1];
+				b += _is_native_slot(src) ? ("\treturn Variant(n" + itos(src & ADDR_MASK) + ");\n") : ("\treturn *" + _addr(src) + ";\n");
 				ip += 2;
 			} break;
 			case OPCODE_JUMP: {
@@ -818,11 +960,15 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 2;
 			} break;
 			case OPCODE_JUMP_IF: {
-				b += "\tif (bool(*" + _addr(_code_ptr[ip + 1]) + ")) goto L" + itos(_code_ptr[ip + 2]) + ";\n";
+				const int c = _code_ptr[ip + 1];
+				const String cond = _is_native_slot(c) ? ("n" + itos(c & ADDR_MASK)) : ("bool(*" + _addr(c) + ")");
+				b += "\tif (" + cond + ") goto L" + itos(_code_ptr[ip + 2]) + ";\n";
 				ip += 3;
 			} break;
 			case OPCODE_JUMP_IF_NOT: {
-				b += "\tif (!bool(*" + _addr(_code_ptr[ip + 1]) + ")) goto L" + itos(_code_ptr[ip + 2]) + ";\n";
+				const int c = _code_ptr[ip + 1];
+				const String cond = _is_native_slot(c) ? ("n" + itos(c & ADDR_MASK)) : ("bool(*" + _addr(c) + ")");
+				b += "\tif (!" + cond + ") goto L" + itos(_code_ptr[ip + 2]) + ";\n";
 				ip += 3;
 			} break;
 			case OPCODE_CALL:
@@ -1043,12 +1189,12 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			} break;
 			case OPCODE_OPERATOR_VALIDATED: {
 				const int oidx = _code_ptr[ip + 4];
-				const String native = _native_operator(_operator_funcs_ptr[oidx], _code_ptr[ip + 1], _code_ptr[ip + 2], _code_ptr[ip + 3]);
-				if (!native.is_empty()) {
+				const ScalarOp so = _match_scalar_op(_operator_funcs_ptr[oidx]);
+				if (so.ok) {
 					if (s_stats) {
 						s_stats->native_ops++;
 					}
-					b += "\t" + native + "\n";
+					b += "\t" + _scalar_ref(_code_ptr[ip + 3], so.rt) + " = " + _scalar_ref(_code_ptr[ip + 1], so.at) + " " + String(so.cpp) + " " + _scalar_ref(_code_ptr[ip + 2], so.bt) + ";\n";
 				} else {
 					b += "\tgf->gds2cpp_operator_func(" + itos(oidx) + ")(" + _addr(_code_ptr[ip + 1]) + ", " + _addr(_code_ptr[ip + 2]) + ", " + _addr(_code_ptr[ip + 3]) + ");\n";
 				}
@@ -1140,9 +1286,13 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				ip += 4;
 			} break;
 			case OPCODE_RETURN_TYPED_BUILTIN: {
-				const String r = _addr(_code_ptr[ip + 1]);
+				const int src = _code_ptr[ip + 1];
 				const int rt = _code_ptr[ip + 2];
-				b += "\t{ const Variant *rr = " + r + "; Variant::Type rt = (Variant::Type)" + itos(rt) + ";\n";
+				if (_is_native_slot(src)) {
+					b += "\t{ Variant _rv0 = Variant(n" + itos(src & ADDR_MASK) + "); const Variant *rr = &_rv0; Variant::Type rt = (Variant::Type)" + itos(rt) + ";\n";
+				} else {
+					b += "\t{ const Variant *rr = " + _addr(src) + "; Variant::Type rt = (Variant::Type)" + itos(rt) + ";\n";
+				}
 				b += "\t\tif (rr->get_type() != rt) { Callable::CallError ce; Variant rv; if (Variant::can_convert_strict(rr->get_type(), rt)) { Variant::construct(rt, rv, &rr, 1, ce); } else { Variant::construct(rt, rv, nullptr, 0, ce); } return rv; }\n";
 				b += "\t\treturn *rr; }\n";
 				ip += 3;
@@ -1629,6 +1779,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 		slots.sort();
 		for (int i = 0; i < slots.size(); i++) {
 			int slot = slots[i];
+			if (s_native_slots.has(slot)) {
+				continue; // native scalar local -- no Variant slot to pre-type
+			}
 			int t = (int)gds2cpp_temporary_slots()[slot];
 			out += "\t{ Callable::CallError _ce; Variant::construct((Variant::Type)" + itos(t) + ", s[" + itos(slot) + "], nullptr, 0, _ce); }\n";
 		}
@@ -1662,6 +1815,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 		si.sort();
 		for (int k = 0; k < si.size(); k++) {
 			int idx = si[k];
+			if (s_native_slots.has(idx)) {
+				continue; // native scalar local -- declared separately below, no Variant alias
+			}
 			bool named = slot_names.has(idx);
 			String nm = named ? slot_names[idx] : ("t" + itos(idx));
 			String tag = (idx < FIXED_ADDRESSES_MAX + _argument_count) ? "arg" : (named ? "local" : "temp");
@@ -1673,9 +1829,23 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			}
 		}
 	}
+	// Native scalar locals (OPT-1): raw C++ values, no Variant storage.
+	if (!s_native_slots.is_empty()) {
+		Vector<int> ni;
+		for (const KeyValue<int, Variant::Type> &E : s_native_slots) {
+			ni.push_back(E.key);
+		}
+		ni.sort();
+		for (int k = 0; k < ni.size(); k++) {
+			const Variant::Type t = s_native_slots[ni[k]];
+			const String init = t == Variant::INT ? "0" : (t == Variant::FLOAT ? "0.0" : "false");
+			out += "\t" + _native_cpp_type(t) + " n" + itos(ni[k]) + " = " + init + "; // native scalar\n";
+		}
+	}
 
 	out += b;
 	out += "\treturn Variant();\n";
 	out += "}\n";
+	s_native_slots.clear();
 	return out;
 }

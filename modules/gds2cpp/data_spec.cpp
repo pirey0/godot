@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  harness.h                                                             */
+/*  data_spec.cpp                                                         */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,28 +28,49 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#pragma once
-#include "core/object/ref_counted.h"
+#include "data_spec.h"
 
-// Drives the auto-generated transpiled Data functions against a live Data object
-// and compares/times them versus the interpreted versions.
-class Gds2cppHarness : public RefCounted {
-	GDCLASS(Gds2cppHarness, RefCounted);
+#include "core/variant/dictionary.h"
+#include "core/variant/variant_internal.h"
+#include "modules/gdscript/gdscript.h"
 
-protected:
-	static void _bind_methods();
+// values is member #15 (Dictionary). property/s args are typed String in the source.
+static constexpr int M_values = 15;
 
-public:
-	// Run a transpiled function by name on p_data (a live GDScript object), returning
-	// its result. Mutating functions affect p_data's real members, same as interpreted.
-	Variant run(Object *p_data, const String &p_func, const Array &p_args);
+// func has(property:String) -> bool: return values.has(property)
+Variant Data_spec::has(GDScriptInstance *inst, GDScriptFunction *, const Variant **args, int) {
+	const Dictionary *values = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values));
+	return values->has(*args[0]);
+}
 
-	// Time interpreted vs transpiled for n iterations; returns a report dictionary.
-	Dictionary bench(Object *p_data, const String &p_func, const Array &p_args, int n);
+// func ofOr(property:String, default):
+//   if values.has(property): return values[property]
+//   return values.get(property.to_lower(), default)
+Variant Data_spec::ofOr(GDScriptInstance *inst, GDScriptFunction *, const Variant **args, int) {
+	Dictionary *values = VariantInternal::get_dictionary(inst->gds2cpp_member_ptr(M_values));
+	const Variant *property = args[0];
+	if (values->has(*property)) {
+		return (*values)[*property];
+	}
+	const String plow = VariantInternal::get_string(property)->to_lower();
+	return values->get(plow, *args[1]);
+}
 
-	// Diagnostic: invoke validated builtin method #idx of p_func on base with args.
-	Variant probe_bm(Object *p_data, const String &p_func, int idx, const Variant &base, const Array &args);
+// func startCaptialized(s:String): return s.substr(0,1).to_upper() + s.substr(1, s.length()-1)
+Variant Data_spec::startCaptialized(GDScriptInstance *, GDScriptFunction *, const Variant **args, int) {
+	const String *s = VariantInternal::get_string(args[0]);
+	return s->substr(0, 1).to_upper() + s->substr(1, s->length() - 1);
+}
 
-	// Three-way: interpreted vs faithful-transpiled vs type-specialized; returns report.
-	Dictionary bench3(Object *p_data, const String &p_func, const Array &p_args, int n);
-};
+Data_spec::Fn Data_spec::lookup(const StringName &p_name) {
+	if (p_name == StringName("has")) {
+		return &Data_spec::has;
+	}
+	if (p_name == StringName("ofOr")) {
+		return &Data_spec::ofOr;
+	}
+	if (p_name == StringName("startCaptialized")) {
+		return &Data_spec::startCaptialized;
+	}
+	return nullptr;
+}

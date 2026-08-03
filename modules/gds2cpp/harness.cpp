@@ -32,6 +32,7 @@
 
 #include "core/os/os.h"
 #include "data_gen_auto.h"
+#include "data_spec.h"
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
 
@@ -139,8 +140,64 @@ Variant Gds2cppHarness::probe_bm(Object *p_data, const String &p_func, int idx, 
 	return ret;
 }
 
+Dictionary Gds2cppHarness::bench3(Object *p_data, const String &p_func, const Array &p_args, int n) {
+	Dictionary out;
+	StringName fname(p_func);
+	Data_gen::Fn ff = Data_gen::lookup(fname);
+	Data_spec::Fn fs = Data_spec::lookup(fname);
+	GDScriptInstance *inst = nullptr;
+	GDScriptFunction *gf = nullptr;
+	if (!ff || !fs || !_resolve(p_data, fname, inst, gf)) {
+		out["error"] = "need faithful+specialized+object for " + p_func;
+		return out;
+	}
+	Variant valbuf[8];
+	const Variant *argp[8];
+	int argc = MIN(p_args.size(), 8);
+	for (int i = 0; i < argc; i++) {
+		valbuf[i] = p_args[i];
+		argp[i] = &valbuf[i];
+	}
+
+	// Correctness: all three must agree.
+	Callable::CallError ce;
+	Variant ri = p_data->callp(fname, argp, argc, ce);
+	Variant rf = ff(inst, gf, argp, argc);
+	Variant rs = fs(inst, gf, argp, argc);
+
+	uint64_t t0 = OS::get_singleton()->get_ticks_usec();
+	for (int i = 0; i < n; i++) {
+		Callable::CallError e;
+		p_data->callp(fname, argp, argc, e);
+	}
+	uint64_t interp_us = OS::get_singleton()->get_ticks_usec() - t0;
+
+	Variant sink;
+	t0 = OS::get_singleton()->get_ticks_usec();
+	for (int i = 0; i < n; i++) {
+		sink = ff(inst, gf, argp, argc);
+	}
+	uint64_t faithful_us = OS::get_singleton()->get_ticks_usec() - t0;
+
+	t0 = OS::get_singleton()->get_ticks_usec();
+	for (int i = 0; i < n; i++) {
+		sink = fs(inst, gf, argp, argc);
+	}
+	uint64_t spec_us = OS::get_singleton()->get_ticks_usec() - t0;
+	(void)sink;
+
+	out["match"] = (ri == rf) && (rf == rs);
+	out["interp_us"] = (int64_t)interp_us;
+	out["faithful_us"] = (int64_t)faithful_us;
+	out["spec_us"] = (int64_t)spec_us;
+	out["faithful_x"] = faithful_us > 0 ? (double)interp_us / (double)faithful_us : 0.0;
+	out["spec_x"] = spec_us > 0 ? (double)interp_us / (double)spec_us : 0.0;
+	return out;
+}
+
 void Gds2cppHarness::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("run", "data", "func", "args"), &Gds2cppHarness::run);
 	ClassDB::bind_method(D_METHOD("bench", "data", "func", "args", "n"), &Gds2cppHarness::bench);
+	ClassDB::bind_method(D_METHOD("bench3", "data", "func", "args", "n"), &Gds2cppHarness::bench3);
 	ClassDB::bind_method(D_METHOD("probe_bm", "data", "func", "idx", "base", "args"), &Gds2cppHarness::probe_bm);
 }

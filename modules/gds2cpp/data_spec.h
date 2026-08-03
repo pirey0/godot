@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  harness.h                                                             */
+/*  data_spec.h                                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -29,27 +29,19 @@
 /**************************************************************************/
 
 #pragma once
-#include "core/object/ref_counted.h"
+// Type-SPECIALIZED transpile target (hand-written to represent what an automated
+// type-inference pass would emit): native Dictionary/String ops, no Variant
+// dispatch, minimal boxing. Same signature as the faithful Data_gen for the harness.
+#include "core/string/string_name.h"
+#include "core/variant/variant.h"
 
-// Drives the auto-generated transpiled Data functions against a live Data object
-// and compares/times them versus the interpreted versions.
-class Gds2cppHarness : public RefCounted {
-	GDCLASS(Gds2cppHarness, RefCounted);
+class GDScriptInstance;
+class GDScriptFunction;
 
-protected:
-	static void _bind_methods();
-
-public:
-	// Run a transpiled function by name on p_data (a live GDScript object), returning
-	// its result. Mutating functions affect p_data's real members, same as interpreted.
-	Variant run(Object *p_data, const String &p_func, const Array &p_args);
-
-	// Time interpreted vs transpiled for n iterations; returns a report dictionary.
-	Dictionary bench(Object *p_data, const String &p_func, const Array &p_args, int n);
-
-	// Diagnostic: invoke validated builtin method #idx of p_func on base with args.
-	Variant probe_bm(Object *p_data, const String &p_func, int idx, const Variant &base, const Array &args);
-
-	// Three-way: interpreted vs faithful-transpiled vs type-specialized; returns report.
-	Dictionary bench3(Object *p_data, const String &p_func, const Array &p_args, int n);
+struct Data_spec {
+	typedef Variant (*Fn)(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Fn lookup(const StringName &p_name);
+	static Variant has(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant ofOr(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
+	static Variant startCaptialized(GDScriptInstance *, GDScriptFunction *, const Variant **, int);
 };

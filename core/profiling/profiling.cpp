@@ -112,7 +112,7 @@ const StringInternData *_intern_name(const StringName &p_name) {
 	return _data;
 }
 
-const tracy::SourceLocationData *intern_source_location(const void *p_function_ptr, const StringName &p_file, const StringName &p_function, const StringName &p_name, uint32_t p_line, bool p_is_script) {
+const tracy::SourceLocationData *intern_source_location(const void *p_function_ptr, const StringName &p_file, const StringName &p_function, const StringName &p_name, uint32_t p_line, bool p_is_script, uint32_t p_color) {
 	ERR_FAIL_COND_V(!configured, &dummy_source_location);
 
 	const uint32_t hash = HashMapHasherDefault::hash(p_function_ptr);
@@ -140,7 +140,7 @@ const tracy::SourceLocationData *intern_source_location(const void *p_function_p
 	_data->source_location_data.name = _data->name->name_utf8.get_data();
 
 	_data->source_location_data.line = p_line;
-	_data->source_location_data.color = p_is_script ? 0x478cbf : 0; // godot_logo_blue
+	_data->source_location_data.color = p_color ? p_color : (p_is_script ? 0x478cbf : 0); // godot_logo_blue, or explicit override
 
 	_data->next = TracyInternTable::source_location_table[idx];
 	_data->prev = nullptr;

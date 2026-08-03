@@ -56,7 +56,7 @@
 
 // Hijacking the tracy namespace so we can use their macros.
 namespace tracy {
-const SourceLocationData *intern_source_location(const void *p_function_ptr, const StringName &p_file, const StringName &p_function, const StringName &p_name, uint32_t p_line, bool p_is_script);
+const SourceLocationData *intern_source_location(const void *p_function_ptr, const StringName &p_file, const StringName &p_function, const StringName &p_name, uint32_t p_line, bool p_is_script, uint32_t p_color = 0);
 } //namespace tracy
 
 // Define tracing macros.
@@ -80,6 +80,10 @@ const SourceLocationData *intern_source_location(const void *p_function_ptr, con
 	tracy::ScopedZone __godot_tracy_script(tracy::intern_source_location(m_ptr, m_file, m_function, m_name, m_line, true))
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line) \
 	tracy::ScopedZone __godot_tracy_zone_system_call(tracy::intern_source_location(m_ptr, m_file, m_function, m_name, m_line, false))
+// gds2cpp: transpiled-C++ script call. Distinct green color so C++ calls are
+// visually separable from interpreted (blue) ones at the same per-call granularity.
+#define GodotProfileZoneScriptCpp(m_ptr, m_file, m_function, m_name, m_line) \
+	tracy::ScopedZone __godot_tracy_script_cpp(tracy::intern_source_location(m_ptr, m_file, m_function, m_name, m_line, true, 0x40b040))
 
 // Defines a profile zone with dynamic text (e.g. a resource path) attached, in one step.
 #define _GodotProfileZoneDynamicImpl(m_var, m_zone_name, m_text, m_size) \
@@ -136,6 +140,7 @@ struct PerfettoGroupedEventEnder {
 
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
+#define GodotProfileZoneScriptCpp(m_ptr, m_file, m_function, m_name, m_line)
 
 #define GodotProfileZoneDynamic(m_zone_name, m_text, m_size) GodotProfileZone(m_zone_name)
 
@@ -197,6 +202,7 @@ private:
 
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
+#define GodotProfileZoneScriptCpp(m_ptr, m_file, m_function, m_name, m_line)
 
 #define GodotProfileZoneDynamic(m_zone_name, m_text, m_size) GodotProfileZone(m_zone_name)
 
@@ -237,6 +243,7 @@ void godot_cleanup_profiler();
 #define GodotProfileZoneScript(m_ptr, m_file, m_function, m_name, m_line)
 // Define a zone for a system call from a script (dynamic source location).
 #define GodotProfileZoneScriptSystemCall(m_ptr, m_file, m_function, m_name, m_line)
+#define GodotProfileZoneScriptCpp(m_ptr, m_file, m_function, m_name, m_line)
 // Defines a profile zone with dynamic text (e.g. a resource path) attached, in one step.
 #define GodotProfileZoneDynamic(m_zone_name, m_text, m_size)
 

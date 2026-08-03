@@ -511,6 +511,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 	// arguments explicitly provided (they don't synthesize default arguments). Anything
 	// else falls through to the interpreter below.
 	if (gds2cpp_enabled && _gds2cpp_fn != nullptr && p_state == nullptr && p_argcount == _argument_count) {
+		// Distinct (green) Tracy zone keyed by the transpiled fn pointer: confirms the C++
+		// body ran and lets it be compared against the interpreted (blue) zone for the same fn.
+		GodotProfileZoneScriptCpp(_gds2cpp_fn, source, name, name, _initial_line);
 		return _gds2cpp_fn(p_instance, this, p_args, p_argcount);
 	}
 

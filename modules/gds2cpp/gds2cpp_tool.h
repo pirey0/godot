@@ -45,6 +45,7 @@ public:
 	// human-readable report (transpiled vs interpreted, first blocking opcode).
 	String analyze_script(const String &p_path);
 	String analyze_dir(const String &p_root);
+	String analyze_program(const String &p_root);
 
 	// Returns the generated C++ for the whole script (one translation unit).
 	String transpile_script(const String &p_path, const String &p_cpp_class);

@@ -224,6 +224,70 @@ String Gds2cppTool::transpile_module_files(const String &p_path, const String &p
 	return vformat("wrote %s.{h,cpp}: %d/%d functions", p_file_base, ok_names.size(), total);
 }
 
+// Whole-program collect + override analysis: how much devirtualization is safe?
+// A method is devirt-eligible if no descendant class overrides it (so a self-call
+// or exact-typed-receiver call always resolves to that one C++ function).
+String Gds2cppTool::analyze_program(const String &p_root) {
+	Vector<String> files;
+	_collect_gd(p_root, files);
+
+	Vector<Ref<GDScript>> scripts;
+	for (const String &f : files) {
+		Ref<GDScript> g = ResourceLoader::load(f);
+		if (g.is_valid()) {
+			scripts.push_back(g);
+		}
+	}
+	// base -> children
+	HashMap<GDScript *, Vector<GDScript *>> children;
+	for (const Ref<GDScript> &g : scripts) {
+		GDScript *b = g->get_base().ptr();
+		if (b) {
+			children[b].push_back(g.ptr());
+		}
+	}
+
+	int total_classes = scripts.size();
+	int total_methods = 0, devirt_eligible = 0, overridden = 0;
+	for (const Ref<GDScript> &g : scripts) {
+		for (const KeyValue<StringName, GDScriptFunction *> &E : g->get_member_functions()) {
+			total_methods++;
+			// DFS descendants of g; is E.key redefined below?
+			bool is_over = false;
+			Vector<GDScript *> stack;
+			if (children.has(g.ptr())) {
+				stack = children[g.ptr()];
+			}
+			while (!stack.is_empty() && !is_over) {
+				GDScript *d = stack[stack.size() - 1];
+				stack.remove_at(stack.size() - 1);
+				if (d->get_member_functions().has(E.key)) {
+					is_over = true;
+					break;
+				}
+				if (children.has(d)) {
+					for (GDScript *c : children[d]) {
+						stack.push_back(c);
+					}
+				}
+			}
+			if (is_over) {
+				overridden++;
+			} else {
+				devirt_eligible++;
+			}
+		}
+	}
+
+	String r = "=== gds2cpp analyze_program: " + p_root + " ===\n";
+	r += vformat("classes: %d\n", total_classes);
+	r += vformat("methods: %d total\n", total_methods);
+	r += vformat("  devirt-eligible (never overridden below): %d (%.1f%%)\n",
+			devirt_eligible, total_methods ? 100.0 * devirt_eligible / total_methods : 0.0);
+	r += vformat("  overridden somewhere: %d\n", overridden);
+	return r;
+}
+
 String Gds2cppTool::analyze_dir(const String &p_root) {
 	Vector<String> files;
 	_collect_gd(p_root, files);
@@ -271,6 +335,7 @@ String Gds2cppTool::analyze_dir(const String &p_root) {
 void Gds2cppTool::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("analyze_script", "path"), &Gds2cppTool::analyze_script);
 	ClassDB::bind_method(D_METHOD("analyze_dir", "root"), &Gds2cppTool::analyze_dir);
+	ClassDB::bind_method(D_METHOD("analyze_program", "root"), &Gds2cppTool::analyze_program);
 	ClassDB::bind_method(D_METHOD("transpile_script", "path", "cpp_class"), &Gds2cppTool::transpile_script);
 	ClassDB::bind_method(D_METHOD("transpile_module_files", "path", "out_dir", "cpp_class", "file_base"), &Gds2cppTool::transpile_module_files);
 }

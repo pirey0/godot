@@ -115,6 +115,18 @@ static HashMap<int, Variant::Type> _member_types(const Ref<GDScript> &p_gds) {
 	return out;
 }
 
+// Build member index -> GDScript class it holds (for cross-class devirt).
+static HashMap<int, const GDScript *> _member_classes(const Ref<GDScript> &p_gds) {
+	HashMap<int, const GDScript *> out;
+	for (const auto &E : p_gds->debug_get_member_indices()) {
+		const GDScriptDataType &dt = E.value.data_type;
+		if (dt.kind == GDScriptDataType::GDSCRIPT && dt.script_type) {
+			out[E.value.index] = Object::cast_to<GDScript>(dt.script_type);
+		}
+	}
+	return out;
+}
+
 String Gds2cppTool::analyze_script(const String &p_path) {
 	Ref<GDScript> gds = ResourceLoader::load(p_path);
 	if (gds.is_null()) {
@@ -127,7 +139,7 @@ String Gds2cppTool::analyze_script(const String &p_path) {
 	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
 		total++;
 		bool ok = false;
-		String result = E.value->transpile_to_cpp("Data_gen", String(E.key), Vector<String>(), HashMap<int, String>(), HashMap<int, Variant::Type>(), HashMap<StringName, Pair<int, String>>(), ok);
+		String result = E.value->transpile_to_cpp("Data_gen", String(E.key), Vector<String>(), HashMap<int, String>(), HashMap<int, Variant::Type>(), HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), ok);
 		if (ok) {
 			ok_count++;
 			report += "  [C++ ] " + String(E.key) + "\n";
@@ -152,7 +164,7 @@ String Gds2cppTool::transpile_script(const String &p_path, const String &p_cpp_c
 	const HashMap<StringName, GDScriptFunction *> &funcs = gds->get_member_functions();
 	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
 		bool ok = false;
-		String result = E.value->transpile_to_cpp(p_cpp_class, String(E.key), src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), ok);
+		String result = E.value->transpile_to_cpp(p_cpp_class, String(E.key), src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), ok);
 		if (ok) {
 			out += result + "\n";
 		} else {
@@ -165,36 +177,48 @@ String Gds2cppTool::transpile_script(const String &p_path, const String &p_cpp_c
 // Emit a compilable <file_base>.{h,cpp} (struct <cls>) for one script. Self-calls to
 // methods in p_eligible are devirtualized to direct C++ calls; nullptr means all own
 // methods are eligible (safe only when the class has no overriding subclass).
-static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr) {
-	const String p_path = gds->get_path();
-	Vector<String> src_lines = _load_source_lines(p_path);
-	String member_block;
-	HashMap<int, String> member_names = _member_names(gds, member_block);
+static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> _no_resolver;
+
+struct OkFn {
+	String orig, cpp;
+	GDScriptFunction *fn;
+};
+
+// Pass A: which functions transpile + assign deterministic unique C++ names.
+static Vector<OkFn> _pass_a(const Ref<GDScript> &gds, const String &cls) {
+	Vector<String> src_lines = _load_source_lines(gds->get_path());
+	String mb;
+	HashMap<int, String> member_names = _member_names(gds, mb);
 	HashMap<int, Variant::Type> member_types = _member_types(gds);
-	const HashMap<StringName, GDScriptFunction *> &funcs = gds->get_member_functions();
-
-	struct OkFn {
-		String orig, cpp;
-		GDScriptFunction *fn;
-	};
-
-	// Pass A: which functions transpile + assign unique C++ names (no devirt yet).
 	Vector<OkFn> ok;
 	HashSet<String> taken_fn;
-	int total = 0;
-	for (const KeyValue<StringName, GDScriptFunction *> &E : funcs) {
-		total++;
+	for (const KeyValue<StringName, GDScriptFunction *> &E : gds->get_member_functions()) {
 		String cpp_name = "fn_" + _sanitize(String(E.key));
 		while (taken_fn.has(cpp_name)) {
 			cpp_name += "_";
 		}
 		bool okv = false;
-		E.value->transpile_to_cpp(cls, cpp_name, src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), okv);
+		E.value->transpile_to_cpp(cls, cpp_name, src_lines, member_names, member_types, HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), okv);
 		if (okv) {
 			taken_fn.insert(cpp_name);
 			ok.push_back(OkFn{ String(E.key), cpp_name, E.value });
 		}
 	}
+	return ok;
+}
+
+static String _emit_class(const Ref<GDScript> &gds, const String &cls, const String &file_base, const String &p_out_dir, const HashSet<StringName> *p_eligible, Gds2cppStats *r_stats = nullptr, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *p_resolver = nullptr) {
+	const String p_path = gds->get_path();
+	const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &resolver = p_resolver ? *p_resolver : _no_resolver;
+	Vector<String> src_lines = _load_source_lines(p_path);
+	String member_block;
+	HashMap<int, String> member_names = _member_names(gds, member_block);
+	HashMap<int, Variant::Type> member_types = _member_types(gds);
+	HashMap<int, const GDScript *> member_classes = _member_classes(gds);
+	const HashMap<StringName, GDScriptFunction *> &funcs = gds->get_member_functions();
+
+	Vector<OkFn> ok = _pass_a(gds, cls);
+	int total = funcs.size();
 
 	// Devirt map: name -> (g_gf index, C++ name), gated by the never-overridden oracle.
 	HashMap<StringName, Pair<int, String>> self_methods;
@@ -208,7 +232,7 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	String bodies;
 	for (int i = 0; i < ok.size(); i++) {
 		bool okv = false;
-		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, okv, r_stats) + "\n";
+		bodies += ok[i].fn->transpile_to_cpp(cls, ok[i].cpp, src_lines, member_names, member_types, self_methods, member_classes, resolver, okv, r_stats) + "\n";
 	}
 
 	const int N = MAX(ok.size(), 1);
@@ -237,7 +261,11 @@ static String _emit_class(const Ref<GDScript> &gds, const String &cls, const Str
 	c += "#include \"core/object/class_db.h\"\n";
 	c += "#include \"core/variant/variant_internal.h\"\n";
 	c += "#include \"modules/gdscript/gdscript.h\"\n";
-	c += "#include \"modules/gdscript/gdscript_function.h\"\n\n";
+	c += "#include \"modules/gdscript/gdscript_function.h\"\n";
+	if (!resolver.is_empty()) {
+		c += "#include \"gds2cpp_all.h\" // cross-class devirt targets\n"; // NOLINT
+	}
+	c += "\n";
 	// Named slot indices into g_gf, referenced via the GF(<method>) macro so devirt
 	// calls read GF(ofOr) instead of g_gf[8].
 	if (ok.size() > 0) {
@@ -321,9 +349,12 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 
 	int total_methods = 0, total_eligible = 0;
 	Gds2cppStats stats;
-	String includes, bind_body;
+
+	// PRE-PASS: per-class devirt-eligibility + the program-wide call resolver
+	// (class -> method -> direct C++ target), needed before any cross-class emit.
+	HashMap<const GDScript *, HashSet<StringName>> eligible_of;
+	HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> resolver;
 	for (const Cls &c : classes) {
-		// eligible = own methods with no override in any descendant.
 		HashSet<StringName> eligible;
 		for (const KeyValue<StringName, GDScriptFunction *> &E : c.gds->get_member_functions()) {
 			total_methods++;
@@ -350,7 +381,19 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 				total_eligible++;
 			}
 		}
-		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible, &stats);
+		eligible_of[c.gds.ptr()] = eligible;
+		Vector<OkFn> ok = _pass_a(c.gds, c.cpp);
+		for (int i = 0; i < ok.size(); i++) {
+			if (eligible.has(StringName(ok[i].orig))) {
+				resolver[c.gds.ptr()][StringName(ok[i].orig)] = Gds2cppTarget{ c.cpp, ok[i].cpp, i };
+			}
+		}
+	}
+
+	// EMIT with cross-class direct calls resolved against the whole program.
+	String includes, bind_body;
+	for (const Cls &c : classes) {
+		_emit_class(c.gds, c.cpp, c.cpp, p_out_dir, &eligible_of[c.gds.ptr()], &stats, &resolver);
 		includes += "#include \"" + c.cpp + ".h\"\n";
 		bind_body += "\t{ Ref<GDScript> g = ResourceLoader::load(\"" + c.path + "\"); if (g.is_valid()) " + c.cpp + "::bind(g.ptr()); }\n";
 	}
@@ -370,19 +413,17 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 	}
 
 	// By-name method calls: how many became native / direct vs stayed dynamic.
-	const int byname = stats.native_calls + stats.devirt_calls + stats.dynamic_calls;
+	const int byname = stats.native_calls + stats.devirt_calls + stats.cross_calls + stats.dynamic_calls;
 	const int all_calls = byname + stats.validated_calls;
 	String r = vformat("classes: %d, methods: %d, devirt-eligible: %d (%.1f%%)\n",
 			classes.size(), total_methods, total_eligible, total_methods ? 100.0 * total_eligible / total_methods : 0.0);
 	r += vformat("call sites: %d total (%d by-name + %d already-validated-builtin)\n", all_calls, byname, stats.validated_calls);
-	r += vformat("  native (by-name -> native builtin): %d (%.1f%% of by-name, %.1f%% of all)\n",
-			stats.native_calls, byname ? 100.0 * stats.native_calls / byname : 0.0, all_calls ? 100.0 * stats.native_calls / all_calls : 0.0);
-	r += vformat("  devirt (self-call -> direct C++):   %d (%.1f%% of by-name, %.1f%% of all)\n",
-			stats.devirt_calls, byname ? 100.0 * stats.devirt_calls / byname : 0.0, all_calls ? 100.0 * stats.devirt_calls / all_calls : 0.0);
-	r += vformat("  dynamic (callp fallback):           %d (%.1f%% of by-name, %.1f%% of all)\n",
-			stats.dynamic_calls, byname ? 100.0 * stats.dynamic_calls / byname : 0.0, all_calls ? 100.0 * stats.dynamic_calls / all_calls : 0.0);
-	const int specialized = stats.native_calls + stats.devirt_calls + stats.validated_calls;
-	r += vformat("  => %.1f%% of all call sites go through pure C++ (native+devirt+validated)\n",
+	r += vformat("  native (by-name -> native builtin):  %d (%.1f%% of by-name)\n", stats.native_calls, byname ? 100.0 * stats.native_calls / byname : 0.0);
+	r += vformat("  devirt (self-call -> direct C++):    %d (%.1f%%)\n", stats.devirt_calls, byname ? 100.0 * stats.devirt_calls / byname : 0.0);
+	r += vformat("  cross-class (typed recv -> direct):  %d (%.1f%%)\n", stats.cross_calls, byname ? 100.0 * stats.cross_calls / byname : 0.0);
+	r += vformat("  dynamic (callp fallback):            %d (%.1f%%)\n", stats.dynamic_calls, byname ? 100.0 * stats.dynamic_calls / byname : 0.0);
+	const int specialized = stats.native_calls + stats.devirt_calls + stats.cross_calls + stats.validated_calls;
+	r += vformat("  => %.1f%% of all call sites go through pure C++ (native+devirt+cross+validated)\n",
 			all_calls ? 100.0 * specialized / all_calls : 0.0);
 	return r;
 }
@@ -468,7 +509,7 @@ String Gds2cppTool::analyze_dir(const String &p_root) {
 		for (const KeyValue<StringName, GDScriptFunction *> &E : gds->get_member_functions()) {
 			total_fns++;
 			bool ok = false;
-			String res = E.value->transpile_to_cpp("X", String(E.key), Vector<String>(), HashMap<int, String>(), HashMap<int, Variant::Type>(), HashMap<StringName, Pair<int, String>>(), ok);
+			String res = E.value->transpile_to_cpp("X", String(E.key), Vector<String>(), HashMap<int, String>(), HashMap<int, Variant::Type>(), HashMap<StringName, Pair<int, String>>(), HashMap<int, const GDScript *>(), HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>>(), ok);
 			if (ok) {
 				ok_fns++;
 			} else {

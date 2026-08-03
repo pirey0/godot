@@ -30,6 +30,9 @@
 
 #include "gdscript_function.h"
 
+#include "gdscript.h"
+
+#include "core/object/script_language.h"
 #include "core/string/ustring.h"
 #include "core/templates/hash_map.h"
 #include "core/templates/hash_set.h"
@@ -117,6 +120,21 @@ static const HashMap<int, Variant::Type> *s_member_types = nullptr; // member id
 static const HashMap<StringName, Pair<int, String>> *s_self_methods = nullptr; // devirt-eligible self methods
 static String s_cpp_class; // owning class C++ name (for direct calls to g_gf/fn_)
 static Gds2cppStats *s_stats = nullptr; // optional per-call-site outcome tally
+static HashMap<int, const GDScript *> s_slot_classes; // stack idx -> GDScript class (from arg types)
+static const HashMap<int, const GDScript *> *s_member_classes = nullptr; // member idx -> class
+static const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> *s_resolver = nullptr;
+
+// GDScript class held by an operand (STACK arg or MEMBER), or nullptr if unknown.
+static const GDScript *_operand_class(int p_addr) {
+	const int idx = p_addr & GDScriptFunction::ADDR_MASK;
+	switch (p_addr >> GDScriptFunction::ADDR_BITS) {
+		case GDScriptFunction::ADDR_TYPE_STACK:
+			return s_slot_classes.has(idx) ? s_slot_classes[idx] : nullptr;
+		case GDScriptFunction::ADDR_TYPE_MEMBER:
+			return (s_member_classes && s_member_classes->has(idx)) ? (*s_member_classes)[idx] : nullptr;
+	}
+	return nullptr;
+}
 
 // Statically-known builtin Variant::Type of an operand, or NIL if unknown.
 static Variant::Type _operand_type(int p_addr) {
@@ -346,7 +364,7 @@ void GDScriptFunction::gds2cpp_slot_names(HashMap<int, String> &r_names) const {
 	}
 }
 
-String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, bool &r_ok, Gds2cppStats *r_stats) const {
+String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const String &p_cpp_func, const Vector<String> &p_source_lines, const HashMap<int, String> &p_member_names, const HashMap<int, Variant::Type> &p_member_types, const HashMap<StringName, Pair<int, String>> &p_self_methods, const HashMap<int, const GDScript *> &p_member_classes, const HashMap<const GDScript *, HashMap<StringName, Gds2cppTarget>> &p_resolver, bool &r_ok, Gds2cppStats *r_stats) const {
 	r_ok = true;
 
 	// --- Pass 1: verify all opcodes are supported + collect jump targets. ---
@@ -429,6 +447,16 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_self_methods = &p_self_methods;
 	s_cpp_class = p_cpp_class;
 	s_stats = r_stats;
+	s_member_classes = &p_member_classes;
+	s_resolver = &p_resolver;
+	// Receiver classes for typed GDScript arguments (slot 3+i).
+	s_slot_classes.clear();
+	for (int i = 0; i < _argument_count && i < argument_types.size(); i++) {
+		const GDScriptDataType &dt = argument_types[i];
+		if (dt.kind == GDScriptDataType::GDSCRIPT && dt.script_type) {
+			s_slot_classes[FIXED_ADDRESSES_MAX + i] = Object::cast_to<GDScript>(dt.script_type);
+		}
+	}
 
 	// --- Pass 2: emit the C++ body. ---
 	String b; // body
@@ -582,6 +610,37 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 					b += "\t}\n";
 					ip += iac + 4;
 					break;
+				}
+
+				// CROSS-CLASS: typed-receiver call to a devirt-eligible method of a known class.
+				if (!is_self && s_resolver) {
+					const GDScript *rc = _operand_class(base_addr);
+					const HashMap<StringName, Gds2cppTarget> *tm = (rc && s_resolver->has(rc)) ? &(*s_resolver)[rc] : nullptr;
+					if (tm && tm->has(mname)) {
+						const Gds2cppTarget &tgt = (*tm)[mname];
+						if (s_stats) {
+							s_stats->cross_calls++;
+						}
+						String ca;
+						if (argc > 0) {
+							ca = "\t\tconst Variant *ca[] = { ";
+							for (int i = 0; i < argc; i++) {
+								ca += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+							}
+							ca += " };\n";
+						}
+						const String call = tgt.class_cpp + "::" + tgt.fn_cpp + "(_si, " + tgt.class_cpp + "::g_gf[" + itos(tgt.gf_index) + "], " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ")";
+						b += "\t{\n" + ca;
+						b += "\t\tObject *_o = " + _addr(base_addr) + "->operator Object *(); GDScriptInstance *_si = _o ? static_cast<GDScriptInstance *>(_o->get_script_instance()) : nullptr;\n";
+						if (ret) {
+							b += "\t\t*" + _addr(_code_ptr[ip + 3 + argc]) + " = _si ? " + call + " : Variant(); // cross-class " + String(mname) + "\n";
+						} else {
+							b += "\t\tif (_si) " + call + "; // cross-class " + String(mname) + "\n";
+						}
+						b += "\t}\n";
+						ip += iac + 4;
+						break;
+					}
 				}
 
 				if (s_stats) {
@@ -1081,6 +1140,9 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	s_member_types = nullptr;
 	s_self_methods = nullptr;
 	s_stats = nullptr;
+	s_member_classes = nullptr;
+	s_resolver = nullptr;
+	s_slot_classes.clear();
 
 	// --- Assemble the function. ---
 	String out;

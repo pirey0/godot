@@ -598,6 +598,21 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 	out += "\ts[0] = inst ? Variant(inst->get_owner()) : Variant();\n";
 	out += "\tfor (int i = 0; i < " + itos(_argument_count) + " && i < p_argc; i++) { s[3 + i] = *p_args[i]; }\n";
 
+	// Pre-type temporary slots exactly as the VM does at function entry, so validated
+	// builtin-method / operator calls write into correctly-typed destinations.
+	{
+		Vector<int> slots;
+		for (const KeyValue<int, Variant::Type> &E : gds2cpp_temporary_slots()) {
+			slots.push_back(E.key);
+		}
+		slots.sort();
+		for (int i = 0; i < slots.size(); i++) {
+			int slot = slots[i];
+			int t = (int)gds2cpp_temporary_slots()[slot];
+			out += "\t{ Callable::CallError _ce; Variant::construct((Variant::Type)" + itos(t) + ", s[" + itos(slot) + "], nullptr, 0, _ce); }\n";
+		}
+	}
+
 	// Named constants for the global names this function references.
 	if (!used_gnames.is_empty()) {
 		Vector<int> gi;

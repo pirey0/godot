@@ -611,6 +611,9 @@ public:
 	_FORCE_INLINE_ int gds2cpp_default_arg_count() const { return _default_arg_count; }
 	_FORCE_INLINE_ int gds2cpp_default_arg(int p_idx) const { return _default_arg_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedConstructor gds2cpp_constructor(int p_idx) const { return _constructors_ptr[p_idx]; }
+	// gds2cpp: typed temporary stack slots the VM pre-initializes at entry so validated
+	// calls can write into correctly-typed destinations. Transpiled code must do the same.
+	_FORCE_INLINE_ const HashMap<int, Variant::Type> &gds2cpp_temporary_slots() const { return temporary_slots; }
 	// gds2cpp: map stack slot -> source identifier (arg/local) for readable names.
 	// Only slots owned by a single identifier for the whole function are returned;
 	// slots reused by differently-named locals are omitted (left as temporaries).

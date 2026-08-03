@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  harness.h                                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,22 +28,25 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include "register_types.h"
+#pragma once
+#include "core/object/ref_counted.h"
 
-#include "core/object/class_db.h"
+// Drives the auto-generated transpiled Data functions against a live Data object
+// and compares/times them versus the interpreted versions.
+class Gds2cppHarness : public RefCounted {
+	GDCLASS(Gds2cppHarness, RefCounted);
 
-#include "data_gen.h"
-#include "gds2cpp_tool.h"
-#include "harness.h"
+protected:
+	static void _bind_methods();
 
-void initialize_gds2cpp_module(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	ClassDB::register_class<Gds2cppData>();
-	ClassDB::register_class<Gds2cppTool>();
-	ClassDB::register_class<Gds2cppHarness>();
-}
+public:
+	// Run a transpiled function by name on p_data (a live GDScript object), returning
+	// its result. Mutating functions affect p_data's real members, same as interpreted.
+	Variant run(Object *p_data, const String &p_func, const Array &p_args);
 
-void uninitialize_gds2cpp_module(ModuleInitializationLevel p_level) {
-}
+	// Time interpreted vs transpiled for n iterations; returns a report dictionary.
+	Dictionary bench(Object *p_data, const String &p_func, const Array &p_args, int n);
+
+	// Diagnostic: invoke validated builtin method #idx of p_func on base with args.
+	Variant probe_bm(Object *p_data, const String &p_func, int idx, const Variant &base, const Array &args);
+};

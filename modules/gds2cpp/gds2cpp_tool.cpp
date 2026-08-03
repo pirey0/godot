@@ -423,6 +423,11 @@ String Gds2cppTool::transpile_program(const String &p_root, const String &p_out_
 		if (g.is_null()) {
 			continue;
 		}
+		// Skip editor/tool scripts: they extend Editor* native classes that don't exist in a
+		// template build, so binding them at runtime (ResourceLoader::load) spews parse errors.
+		if (String(g->get_instance_base_type()).begins_with("Editor")) {
+			continue;
+		}
 		String base = f.trim_prefix("res://").trim_suffix(".gd");
 		String cpp = "G_" + _sanitize(base);
 		while (taken_cls.has(cpp)) {

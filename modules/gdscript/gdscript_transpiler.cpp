@@ -123,9 +123,24 @@ static String _gname(int p_idx) {
 // Instruction size for the opcodes we support (some are variable-length).
 // Returns 0 for unsupported opcodes.
 static int _instr_size(const int *p_code, int p_ip) {
-	switch (GDScriptFunction::Opcode(p_code[p_ip])) {
+	const int op = p_code[p_ip];
+	// TYPE_ADJUST_* family: opcode + 1 slot operand.
+	if (op >= GDScriptFunction::OPCODE_TYPE_ADJUST_BOOL && op <= GDScriptFunction::OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY) {
+		return 2;
+	}
+	// Typed ITERATE_BEGIN_* family (RANGE is longer: counter/from/to/step/iter + jump).
+	if (op >= GDScriptFunction::OPCODE_ITERATE_BEGIN && op <= GDScriptFunction::OPCODE_ITERATE_BEGIN_RANGE) {
+		return op == GDScriptFunction::OPCODE_ITERATE_BEGIN_RANGE ? 7 : 5;
+	}
+	// Typed ITERATE_* family (RANGE: counter/to/step/iter + jump).
+	if (op >= GDScriptFunction::OPCODE_ITERATE && op <= GDScriptFunction::OPCODE_ITERATE_RANGE) {
+		return op == GDScriptFunction::OPCODE_ITERATE_RANGE ? 6 : 5;
+	}
+	switch (GDScriptFunction::Opcode(op)) {
 		case GDScriptFunction::OPCODE_JUMP_TO_DEF_ARGUMENT:
 			return 1; // always jumps; occupies a single slot
+		case GDScriptFunction::OPCODE_BREAKPOINT:
+			return 1;
 		case GDScriptFunction::OPCODE_LINE:
 		case GDScriptFunction::OPCODE_ASSIGN_NULL:
 		case GDScriptFunction::OPCODE_ASSIGN_TRUE:
@@ -136,22 +151,47 @@ static int _instr_size(const int *p_code, int p_ip) {
 		case GDScriptFunction::OPCODE_ASSIGN:
 		case GDScriptFunction::OPCODE_JUMP_IF:
 		case GDScriptFunction::OPCODE_JUMP_IF_NOT:
+		case GDScriptFunction::OPCODE_JUMP_IF_SHARED:
 		case GDScriptFunction::OPCODE_SET_MEMBER:
+		case GDScriptFunction::OPCODE_GET_MEMBER:
 		case GDScriptFunction::OPCODE_STORE_GLOBAL:
+		case GDScriptFunction::OPCODE_STORE_NAMED_GLOBAL:
+		case GDScriptFunction::OPCODE_ASSERT:
 			return 3;
 		case GDScriptFunction::OPCODE_RETURN_TYPED_BUILTIN:
+		case GDScriptFunction::OPCODE_RETURN_TYPED_NATIVE:
+		case GDScriptFunction::OPCODE_RETURN_TYPED_SCRIPT:
 			return 3;
 		case GDScriptFunction::OPCODE_TYPE_TEST_BUILTIN:
 		case GDScriptFunction::OPCODE_TYPE_TEST_NATIVE:
+		case GDScriptFunction::OPCODE_TYPE_TEST_SCRIPT:
 		case GDScriptFunction::OPCODE_GET_NAMED_VALIDATED:
 		case GDScriptFunction::OPCODE_GET_NAMED:
+		case GDScriptFunction::OPCODE_SET_NAMED:
+		case GDScriptFunction::OPCODE_SET_NAMED_VALIDATED:
+		case GDScriptFunction::OPCODE_GET_KEYED:
+		case GDScriptFunction::OPCODE_SET_KEYED:
+		case GDScriptFunction::OPCODE_CAST_TO_BUILTIN:
+		case GDScriptFunction::OPCODE_CAST_TO_NATIVE:
+		case GDScriptFunction::OPCODE_CAST_TO_SCRIPT:
 		case GDScriptFunction::OPCODE_ASSIGN_TYPED_BUILTIN:
 		case GDScriptFunction::OPCODE_ASSIGN_TYPED_NATIVE:
+		case GDScriptFunction::OPCODE_ASSIGN_TYPED_SCRIPT:
 			return 4;
+		case GDScriptFunction::OPCODE_GET_INDEXED_VALIDATED:
+		case GDScriptFunction::OPCODE_SET_INDEXED_VALIDATED:
+		case GDScriptFunction::OPCODE_RETURN_TYPED_ARRAY:
+			return 5;
 		case GDScriptFunction::OPCODE_TYPE_TEST_ARRAY:
+		case GDScriptFunction::OPCODE_ASSIGN_TYPED_ARRAY:
 			return 6;
+		case GDScriptFunction::OPCODE_RETURN_TYPED_DICTIONARY:
+			return 8;
 		case GDScriptFunction::OPCODE_TYPE_TEST_DICTIONARY:
+		case GDScriptFunction::OPCODE_ASSIGN_TYPED_DICTIONARY:
 			return 9;
+		case GDScriptFunction::OPCODE_CONSTRUCT:
+			return p_code[p_ip + 1] + 4;
 		case GDScriptFunction::OPCODE_OPERATOR_VALIDATED:
 		case GDScriptFunction::OPCODE_GET_KEYED_VALIDATED:
 		case GDScriptFunction::OPCODE_SET_KEYED_VALIDATED:
@@ -169,10 +209,15 @@ static int _instr_size(const int *p_code, int p_ip) {
 			return p_code[p_ip + 1] + 4;
 		case GDScriptFunction::OPCODE_CALL_BUILTIN_TYPE_VALIDATED:
 		case GDScriptFunction::OPCODE_CALL_UTILITY:
+		case GDScriptFunction::OPCODE_CALL_UTILITY_VALIDATED:
+		case GDScriptFunction::OPCODE_CALL_GDSCRIPT_UTILITY:
 		case GDScriptFunction::OPCODE_CALL_METHOD_BIND:
 		case GDScriptFunction::OPCODE_CALL_METHOD_BIND_RET:
 		case GDScriptFunction::OPCODE_CONSTRUCT_VALIDATED:
 			return p_code[p_ip + 1] + 4;
+		case GDScriptFunction::OPCODE_CALL_BUILTIN_STATIC:
+		case GDScriptFunction::OPCODE_CONSTRUCT_TYPED_ARRAY:
+			return p_code[p_ip + 1] + 5;
 		case GDScriptFunction::OPCODE_CONSTRUCT_DICTIONARY:
 		case GDScriptFunction::OPCODE_CONSTRUCT_ARRAY:
 			return p_code[p_ip + 1] + 3;
@@ -230,18 +275,21 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			}
 		}
 		int size = _instr_size(_code_ptr, ip);
-		if (size == 0) {
+		if (size <= 0 || ip + size > _code_size) {
 			r_ok = false;
-			// Report the first unsupported opcode + the walk trace (to catch misalignment).
-			return "OPCODE_" + itos((int)op) + " @ip=" + itos(ip) + " trace=[" + trace + "]";
+			// Report the first unsupported / misaligned opcode + the walk trace.
+			return "OPCODE_" + itos((int)op) + " @ip=" + itos(ip) + " size=" + itos(size) + " trace=[" + trace + "]";
 		}
 		trace += itos(ip) + ":" + itos((int)op) + " ";
 		if (op == OPCODE_JUMP) {
 			jump_targets.insert(_code_ptr[ip + 1]);
-		} else if (op == OPCODE_JUMP_IF || op == OPCODE_JUMP_IF_NOT) {
+		} else if (op == OPCODE_JUMP_IF || op == OPCODE_JUMP_IF_NOT || op == OPCODE_JUMP_IF_SHARED) {
 			jump_targets.insert(_code_ptr[ip + 2]);
-		} else if (op == OPCODE_ITERATE_BEGIN || op == OPCODE_ITERATE_BEGIN_ARRAY || op == OPCODE_ITERATE_BEGIN_DICTIONARY ||
-				op == OPCODE_ITERATE || op == OPCODE_ITERATE_ARRAY || op == OPCODE_ITERATE_DICTIONARY) {
+		} else if (op == OPCODE_ITERATE_BEGIN_RANGE) {
+			jump_targets.insert(_code_ptr[ip + 6]);
+		} else if (op == OPCODE_ITERATE_RANGE) {
+			jump_targets.insert(_code_ptr[ip + 5]);
+		} else if ((op >= OPCODE_ITERATE_BEGIN && op <= OPCODE_ITERATE_BEGIN_RANGE) || (op >= OPCODE_ITERATE && op <= OPCODE_ITERATE_RANGE)) {
 			jump_targets.insert(_code_ptr[ip + 4]);
 		} else if (op == OPCODE_JUMP_TO_DEF_ARGUMENT) {
 			for (int d = 0; d <= _default_arg_count; d++) {
@@ -281,6 +329,47 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 			b += "L" + itos(ip) + ":;\n";
 		}
 		Opcode op = Opcode(_code_ptr[ip]);
+
+		// --- Families handled by range (pre-switch), all faithful. ---
+		if (op >= OPCODE_TYPE_ADJUST_BOOL && op <= OPCODE_TYPE_ADJUST_PACKED_VECTOR4_ARRAY) {
+			int t = (int)op - (int)OPCODE_TYPE_ADJUST_BOOL + (int)Variant::BOOL;
+			const String a = _addr(_code_ptr[ip + 1]);
+			b += "\t{ Variant *_a = " + a + "; if (_a->get_type() != (Variant::Type)" + itos(t) + ") { const Variant *_ai = _a; Callable::CallError _ce; Variant _tmp; Variant::construct((Variant::Type)" + itos(t) + ", _tmp, &_ai, 1, _ce); *_a = _tmp; } }\n";
+			ip += 2;
+			continue;
+		}
+		if (op == OPCODE_ITERATE_BEGIN_RANGE) {
+			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; int64_t _from = (int64_t)*" + _addr(_code_ptr[ip + 2]) + "; int64_t _to = (int64_t)*" + _addr(_code_ptr[ip + 3]) + "; int64_t _step = (int64_t)*" + _addr(_code_ptr[ip + 4]) + ";\n";
+			b += "\t\t*ctr = _from;\n";
+			b += "\t\tif (!(_from == _to ? false : (_from < _to ? _step > 0 : _step < 0))) goto L" + itos(_code_ptr[ip + 6]) + ";\n";
+			b += "\t\t*" + _addr(_code_ptr[ip + 5]) + " = _from; }\n";
+			ip += 7;
+			continue;
+		}
+		if (op == OPCODE_ITERATE_RANGE) {
+			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; int64_t _to = (int64_t)*" + _addr(_code_ptr[ip + 2]) + "; int64_t _step = (int64_t)*" + _addr(_code_ptr[ip + 3]) + ";\n";
+			b += "\t\tint64_t _c = (int64_t)*ctr + _step; *ctr = _c;\n";
+			b += "\t\tif ((_step < 0 && _c <= _to) || (_step > 0 && _c >= _to)) goto L" + itos(_code_ptr[ip + 5]) + ";\n";
+			b += "\t\t*" + _addr(_code_ptr[ip + 4]) + " = _c; }\n";
+			ip += 6;
+			continue;
+		}
+		if (op >= OPCODE_ITERATE_BEGIN && op <= OPCODE_ITERATE_BEGIN_RANGE) { // typed BEGIN -> generic iter protocol
+			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
+			b += "\t\t*ctr = Variant();\n";
+			b += "\t\tif (!cont->iter_init(*ctr, valid)) goto L" + itos(_code_ptr[ip + 4]) + ";\n";
+			b += "\t\t*" + _addr(_code_ptr[ip + 3]) + " = cont->iter_get(*ctr, valid); }\n";
+			ip += 5;
+			continue;
+		}
+		if (op >= OPCODE_ITERATE && op <= OPCODE_ITERATE_RANGE) { // typed ITERATE -> generic iter protocol
+			b += "\t{ Variant *ctr = " + _addr(_code_ptr[ip + 1]) + "; Variant *cont = " + _addr(_code_ptr[ip + 2]) + "; bool valid;\n";
+			b += "\t\tif (!cont->iter_next(*ctr, valid)) goto L" + itos(_code_ptr[ip + 4]) + ";\n";
+			b += "\t\t*" + _addr(_code_ptr[ip + 3]) + " = cont->iter_get(*ctr, valid); }\n";
+			ip += 5;
+			continue;
+		}
+
 		switch (op) {
 			case OPCODE_END: {
 				ip = _code_size;
@@ -559,6 +648,170 @@ String GDScriptFunction::transpile_to_cpp(const String &p_cpp_class, const Strin
 				}
 				b += "\t\t} }\n";
 				ip += 1;
+			} break;
+			case OPCODE_GET_MEMBER: {
+				b += "\t{ ClassDB::get_property(inst->get_owner(), " + _gname(_code_ptr[ip + 2]) + ", *" + _addr(_code_ptr[ip + 1]) + "); }\n";
+				ip += 3;
+			} break;
+			case OPCODE_GET_KEYED: {
+				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 3]) + " = " + _addr(_code_ptr[ip + 1]) + "->get(*" + _addr(_code_ptr[ip + 2]) + ", &valid); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_SET_KEYED: {
+				b += "\t{ bool valid; " + _addr(_code_ptr[ip + 1]) + "->set(*" + _addr(_code_ptr[ip + 2]) + ", *" + _addr(_code_ptr[ip + 3]) + ", &valid); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_GET_INDEXED_VALIDATED: {
+				b += "\t{ bool valid; *" + _addr(_code_ptr[ip + 3]) + " = " + _addr(_code_ptr[ip + 1]) + "->get(*" + _addr(_code_ptr[ip + 2]) + ", &valid); }\n";
+				ip += 5;
+			} break;
+			case OPCODE_SET_INDEXED_VALIDATED: {
+				b += "\t{ bool valid; " + _addr(_code_ptr[ip + 1]) + "->set(*" + _addr(_code_ptr[ip + 2]) + ", *" + _addr(_code_ptr[ip + 3]) + ", &valid); }\n";
+				ip += 5;
+			} break;
+			case OPCODE_SET_NAMED: {
+				b += "\t{ bool valid; " + _addr(_code_ptr[ip + 1]) + "->set_named(" + _gname(_code_ptr[ip + 3]) + ", *" + _addr(_code_ptr[ip + 2]) + ", valid); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_SET_NAMED_VALIDATED: {
+				b += "\tgf->gds2cpp_setter(" + itos(_code_ptr[ip + 3]) + ")(" + _addr(_code_ptr[ip + 1]) + ", " + _addr(_code_ptr[ip + 2]) + ");\n";
+				ip += 4;
+			} break;
+			case OPCODE_CAST_TO_BUILTIN: {
+				const int t = _code_ptr[ip + 3];
+				b += "\t{ const Variant *_s = " + _addr(_code_ptr[ip + 1]) + "; Callable::CallError _ce; Variant::construct((Variant::Type)" + itos(t) + ", *" + _addr(_code_ptr[ip + 2]) + ", &_s, 1, _ce); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_CAST_TO_NATIVE: {
+				// x as NativeClass: keep the object if it derives from the class, else null.
+				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 1]) + "->operator Object *(); StringName _cn = " + _addr(_code_ptr[ip + 2]) + "->operator StringName(); *" + _addr(_code_ptr[ip + 3]) + " = (_o && ClassDB::is_parent_class(_o->get_class_name(), _cn)) ? Variant(_o) : Variant(); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_CAST_TO_SCRIPT: {
+				// Faithful-simplified: pass the object through (script identity check omitted).
+				b += "\t*" + _addr(_code_ptr[ip + 3]) + " = *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				ip += 4;
+			} break;
+			case OPCODE_TYPE_TEST_SCRIPT: {
+				b += "\t{ Object *_o = " + _addr(_code_ptr[ip + 2]) + "->operator Object *(); *" + _addr(_code_ptr[ip + 1]) + " = (_o && _o->get_script_instance() && _o->get_script_instance()->get_script() == " + _addr(_code_ptr[ip + 3]) + "->operator Object *()); }\n";
+				ip += 4;
+			} break;
+			case OPCODE_JUMP_IF_SHARED: {
+				b += "\tif (" + _addr(_code_ptr[ip + 1]) + "->is_shared()) goto L" + itos(_code_ptr[ip + 2]) + ";\n";
+				ip += 3;
+			} break;
+			case OPCODE_STORE_NAMED_GLOBAL: {
+				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = GDScriptLanguage::get_singleton()->get_named_globals_map()[" + _gname(_code_ptr[ip + 2]) + "];\n";
+				ip += 3;
+			} break;
+			case OPCODE_ASSERT: {
+				// Release: assertions are stripped; keep as a no-op for faithful behavior.
+				ip += 3;
+			} break;
+			case OPCODE_CALL_UTILITY_VALIDATED: {
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int fn_idx = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tgf->gds2cpp_utility(" + itos(fn_idx) + ")(" + _addr(_code_ptr[ip + 2 + argc]) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ");\n";
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CALL_GDSCRIPT_UTILITY: {
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int fn_idx = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tCallable::CallError _ce; gf->gds2cpp_gds_utility(" + itos(fn_idx) + ")(" + _addr(_code_ptr[ip + 2 + argc]) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_CALL_BUILTIN_STATIC: {
+				const int iac = _code_ptr[ip + 1];
+				const int type = _code_ptr[ip + 2 + iac];
+				const int methodname_idx = _code_ptr[ip + 3 + iac];
+				const int argc = _code_ptr[ip + 4 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tCallable::CallError _ce; Variant::call_static((Variant::Type)" + itos(type) + ", " + _gname(methodname_idx) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", *" + _addr(_code_ptr[ip + 2 + argc]) + ", _ce);\n";
+				b += "\t}\n";
+				ip += iac + 5;
+			} break;
+			case OPCODE_CONSTRUCT_TYPED_ARRAY: {
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int builtin_type = _code_ptr[ip + 3 + iac];
+				const int native_idx = _code_ptr[ip + 4 + iac];
+				b += "\t{\n";
+				b += "\t\tArray _arr; _arr.set_typed((uint32_t)" + itos(builtin_type) + ", " + _gname(native_idx) + ", *" + _addr(_code_ptr[ip + 2 + argc + 1]) + ");\n";
+				b += "\t\t_arr.resize(" + itos(argc) + ");\n";
+				for (int i = 0; i < argc; i++) {
+					b += "\t\t_arr[" + itos(i) + "] = *" + _addr(_code_ptr[ip + 2 + i]) + ";\n";
+				}
+				b += "\t\t*" + _addr(_code_ptr[ip + 2 + argc]) + " = _arr;\n";
+				b += "\t}\n";
+				ip += iac + 5;
+			} break;
+			case OPCODE_CONSTRUCT: {
+				const int iac = _code_ptr[ip + 1];
+				const int argc = _code_ptr[ip + 2 + iac];
+				const int t = _code_ptr[ip + 3 + iac];
+				b += "\t{\n";
+				if (argc > 0) {
+					b += "\t\tconst Variant *ca[] = { ";
+					for (int i = 0; i < argc; i++) {
+						b += (i ? ", " : "") + _addr(_code_ptr[ip + 2 + i]);
+					}
+					b += " };\n";
+				}
+				b += "\t\tCallable::CallError _ce; Variant::construct((Variant::Type)" + itos(t) + ", *" + _addr(_code_ptr[ip + 2 + argc]) + ", " + (argc > 0 ? "ca" : "nullptr") + ", " + itos(argc) + ", _ce);\n";
+				b += "\t}\n";
+				ip += iac + 4;
+			} break;
+			case OPCODE_RETURN_TYPED_NATIVE:
+			case OPCODE_RETURN_TYPED_SCRIPT: {
+				b += "\treturn *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				ip += 3;
+			} break;
+			case OPCODE_RETURN_TYPED_ARRAY: {
+				b += "\treturn *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				ip += 5;
+			} break;
+			case OPCODE_RETURN_TYPED_DICTIONARY: {
+				b += "\treturn *" + _addr(_code_ptr[ip + 1]) + ";\n";
+				ip += 8;
+			} break;
+			case OPCODE_ASSIGN_TYPED_SCRIPT: {
+				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = *" + _addr(_code_ptr[ip + 2]) + ";\n";
+				ip += 4;
+			} break;
+			case OPCODE_ASSIGN_TYPED_ARRAY: {
+				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = *" + _addr(_code_ptr[ip + 2]) + ";\n";
+				ip += 6;
+			} break;
+			case OPCODE_ASSIGN_TYPED_DICTIONARY: {
+				b += "\t*" + _addr(_code_ptr[ip + 1]) + " = *" + _addr(_code_ptr[ip + 2]) + ";\n";
+				ip += 9;
 			} break;
 			default: {
 				r_ok = false;

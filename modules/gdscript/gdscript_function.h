@@ -606,6 +606,9 @@ public:
 	_FORCE_INLINE_ Variant::ValidatedKeyedGetter gds2cpp_keyed_getter(int p_idx) const { return _keyed_getters_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedKeyedSetter gds2cpp_keyed_setter(int p_idx) const { return _keyed_setters_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedGetter gds2cpp_getter(int p_idx) const { return _getters_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedSetter gds2cpp_setter(int p_idx) const { return _setters_ptr[p_idx]; }
+	_FORCE_INLINE_ Variant::ValidatedUtilityFunction gds2cpp_utility(int p_idx) const { return _utilities_ptr[p_idx]; }
+	_FORCE_INLINE_ GDScriptUtilityFunctions::FunctionPtr gds2cpp_gds_utility(int p_idx) const { return _gds_utilities_ptr[p_idx]; }
 	_FORCE_INLINE_ Variant::ValidatedBuiltInMethod gds2cpp_builtin_method(int p_idx) const { return _builtin_methods_ptr[p_idx]; }
 	_FORCE_INLINE_ MethodBind *gds2cpp_method(int p_idx) const { return _methods_ptr[p_idx]; }
 	_FORCE_INLINE_ int gds2cpp_default_arg_count() const { return _default_arg_count; }

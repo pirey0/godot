@@ -48,6 +48,6 @@ public:
 	// Returns the generated C++ for the whole script (one translation unit).
 	String transpile_script(const String &p_path, const String &p_cpp_class);
 
-	// Writes a compilable data_gen_auto.{h,cpp} into p_out_dir (built into the engine).
-	String transpile_module_files(const String &p_path, const String &p_out_dir);
+	// Writes a compilable <file_base>.{h,cpp} (struct <cpp_class>) into p_out_dir.
+	String transpile_module_files(const String &p_path, const String &p_out_dir, const String &p_cpp_class, const String &p_file_base);
 };

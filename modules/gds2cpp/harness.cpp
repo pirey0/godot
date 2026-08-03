@@ -35,6 +35,15 @@
 #include "data_spec.h"
 #include "modules/gdscript/gdscript.h"
 #include "modules/gdscript/gdscript_function.h"
+#include "optest_gen.h"
+
+// Try each generated translation unit's lookup (same Fn signature).
+static Data_gen::Fn _find_fn(const StringName &n) {
+	if (Data_gen::Fn f = Data_gen::lookup(n)) {
+		return f;
+	}
+	return OpTest_gen::lookup(n);
+}
 
 // Resolve the GDScriptInstance + GDScriptFunction for a live GDScript object.
 static bool _resolve(Object *p_data, const StringName &p_func, GDScriptInstance *&r_inst, GDScriptFunction *&r_gf) {
@@ -56,7 +65,7 @@ static bool _resolve(Object *p_data, const StringName &p_func, GDScriptInstance 
 
 Variant Gds2cppHarness::run(Object *p_data, const String &p_func, const Array &p_args) {
 	StringName fname(p_func);
-	Data_gen::Fn f = Data_gen::lookup(fname);
+	Data_gen::Fn f = _find_fn(fname);
 	GDScriptInstance *inst = nullptr;
 	GDScriptFunction *gf = nullptr;
 	if (!f || !_resolve(p_data, fname, inst, gf)) {
@@ -75,7 +84,7 @@ Variant Gds2cppHarness::run(Object *p_data, const String &p_func, const Array &p
 Dictionary Gds2cppHarness::bench(Object *p_data, const String &p_func, const Array &p_args, int n) {
 	Dictionary out;
 	StringName fname(p_func);
-	Data_gen::Fn f = Data_gen::lookup(fname);
+	Data_gen::Fn f = _find_fn(fname);
 	GDScriptInstance *inst = nullptr;
 	GDScriptFunction *gf = nullptr;
 	if (!f || !_resolve(p_data, fname, inst, gf)) {
@@ -143,7 +152,7 @@ Variant Gds2cppHarness::probe_bm(Object *p_data, const String &p_func, int idx, 
 Dictionary Gds2cppHarness::bench3(Object *p_data, const String &p_func, const Array &p_args, int n) {
 	Dictionary out;
 	StringName fname(p_func);
-	Data_gen::Fn ff = Data_gen::lookup(fname);
+	Data_gen::Fn ff = _find_fn(fname);
 	Data_spec::Fn fs = Data_spec::lookup(fname);
 	GDScriptInstance *inst = nullptr;
 	GDScriptFunction *gf = nullptr;

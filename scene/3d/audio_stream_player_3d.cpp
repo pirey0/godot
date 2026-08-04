@@ -305,52 +305,12 @@ void AudioStreamPlayer3D::_notification(int p_what) {
 #ifndef PHYSICS_3D_DISABLED
 // Interacts with PhysicsServer3D, so can only be called during _physics_process
 Area3D *AudioStreamPlayer3D::_get_overriding_area() {
-	//check if any area is diverting sound into a bus
-	Ref<World3D> world_3d = get_world_3d();
-	ERR_FAIL_COND_V(world_3d.is_null(), nullptr);
-
-	Vector3 global_pos = get_global_transform().origin;
-
-	PhysicsDirectSpaceState3D *space_state = PhysicsServer3D::get_singleton()->space_get_direct_state(world_3d->get_space());
-
-	PhysicsDirectSpaceState3D::ShapeResult sr[MAX_INTERSECT_AREAS];
-
-	PhysicsDirectSpaceState3D::PointParameters point_params;
-	point_params.position = global_pos;
-	point_params.collision_mask = area_mask;
-	point_params.collide_with_bodies = false;
-	point_params.collide_with_areas = true;
-
-	int areas = space_state->intersect_point(point_params, sr, MAX_INTERSECT_AREAS);
-
-	for (int i = 0; i < areas; i++) {
-		if (!sr[i].collider) {
-			continue;
-		}
-
-		Area3D *tarea = Object::cast_to<Area3D>(sr[i].collider);
-		if (!tarea) {
-			continue;
-		}
-
-		if (!tarea->is_overriding_audio_bus() && !tarea->is_using_reverb_bus()) {
-			continue;
-		}
-
-		return tarea;
-	}
 	return nullptr;
 }
 #endif // PHYSICS_3D_DISABLED
 
 // Interacts with PhysicsServer3D, so can only be called during _physics_process.
 StringName AudioStreamPlayer3D::_get_actual_bus() {
-#ifndef PHYSICS_3D_DISABLED
-	Area3D *overriding_area = _get_overriding_area();
-	if (overriding_area && overriding_area->is_overriding_audio_bus() && !overriding_area->is_using_reverb_bus()) {
-		return overriding_area->get_audio_bus_name();
-	}
-#endif // PHYSICS_3D_DISABLED
 	return internal->bus;
 }
 
@@ -381,10 +341,6 @@ Vector<AudioFrame> AudioStreamPlayer3D::_update_panning() {
 	HashSet<Camera3D *> cameras = world_3d->get_cameras();
 	cameras.insert(get_viewport()->get_camera_3d());
 
-#ifndef PHYSICS_3D_DISABLED
-	PhysicsDirectSpaceState3D *space_state = PhysicsServer3D::get_singleton()->space_get_direct_state(world_3d->get_space());
-#endif // PHYSICS_3D_DISABLED
-
 	for (Camera3D *camera : cameras) {
 		if (!camera) {
 			continue;
@@ -408,25 +364,10 @@ Vector<AudioFrame> AudioStreamPlayer3D::_update_panning() {
 
 		float dist = local_pos.length();
 
-#ifndef PHYSICS_3D_DISABLED
-		Vector3 area_sound_pos;
-		Vector3 listener_area_pos;
-
-		Area3D *area = _get_overriding_area();
-		if (area && area->is_using_reverb_bus() && area->get_reverb_uniformity() > 0) {
-			area_sound_pos = space_state->get_closest_point_to_object_volume(area->get_rid(), listener_node->get_global_transform().origin);
-			listener_area_pos = listener_node->get_global_transform().affine_inverse().xform(area_sound_pos);
-		}
-#endif // PHYSICS_3D_DISABLED
-
 		if (max_distance > 0) {
 			float total_max = max_distance;
 
-#ifndef PHYSICS_3D_DISABLED
-			if (area && area->is_using_reverb_bus() && area->get_reverb_uniformity() > 0) {
-				total_max = MAX(total_max, listener_area_pos.length());
-			}
-#endif // PHYSICS_3D_DISABLED
+
 			if (dist > total_max || total_max > max_distance) {
 				if (!was_further_than_max_distance_last_frame) {
 					HashMap<StringName, Vector<AudioFrame>> bus_volumes;
@@ -479,21 +420,6 @@ Vector<AudioFrame> AudioStreamPlayer3D::_update_panning() {
 		}
 
 		HashMap<StringName, Vector<AudioFrame>> bus_volumes;
-#ifndef PHYSICS_3D_DISABLED
-		if (area) {
-			if (area->is_overriding_audio_bus()) {
-				//override audio bus
-				bus_volumes[area->get_audio_bus_name()] = output_volume_vector;
-			}
-
-			if (area->is_using_reverb_bus()) {
-				StringName reverb_bus_name = area->get_reverb_bus_name();
-				Vector<AudioFrame> reverb_vol;
-				_calc_reverb_vol(area, listener_area_pos, output_volume_vector, reverb_vol);
-				bus_volumes[reverb_bus_name] = reverb_vol;
-			}
-		} else
-#endif // PHYSICS_3D_DISABLED
 		{
 			bus_volumes[internal->bus] = output_volume_vector;
 		}

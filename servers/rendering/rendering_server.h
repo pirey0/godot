@@ -450,7 +450,7 @@ public:
 		MULTIMESH_INTERP_QUALITY_HIGH,
 	};
 
-    /* DEBUG API */
+	/* DEBUG API */
 
 	struct ResourceInfo {
 		String path;
@@ -1886,6 +1886,10 @@ public:
 
 	virtual bool is_on_render_thread() = 0;
 	virtual void call_on_render_thread(const Callable &p_callable) = 0;
+
+	// Starts or stops the separate render thread at runtime. Main thread only.
+	virtual void set_rendering_threaded(bool p_threaded) = 0;
+	virtual bool is_rendering_threaded() const = 0;
 
 	String get_current_rendering_driver_name() const;
 	String get_current_rendering_method() const;

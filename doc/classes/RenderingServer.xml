@@ -2100,6 +2100,12 @@
 				Returns [code]true[/code] if our code is currently executing on the rendering thread.
 			</description>
 		</method>
+		<method name="is_rendering_threaded" qualifiers="const">
+			<return type="bool" />
+			<description>
+				Returns [code]true[/code] if rendering runs on a separate thread. See [method set_rendering_threaded].
+			</description>
+		</method>
 		<method name="light_directional_set_blend_splits">
 			<return type="void" />
 			<param index="0" name="light" type="RID" />
@@ -3495,6 +3501,15 @@
 			<param index="0" name="color" type="Color" />
 			<description>
 				Sets the default clear color which is used when a specific clear color has not been selected. See also [method get_default_clear_color].
+			</description>
+		</method>
+		<method name="set_rendering_threaded">
+			<return type="void" />
+			<param index="0" name="threaded" type="bool" />
+			<description>
+				Starts or stops the separate rendering thread at runtime, overriding the [member ProjectSettings.rendering/driver/threads/thread_model] the project booted with. Can only be called from the main thread.
+				This allows a project to load with rendering on the main thread, which avoids the render thread contending with resource loading, and then move rendering onto its own thread once loading is done.
+				[b]Note:[/b] Rendering on a separate thread is experimental. Only switch at a point where no other thread is using the [RenderingServer], such as right after a loading screen finishes.
 			</description>
 		</method>
 		<method name="shader_create">

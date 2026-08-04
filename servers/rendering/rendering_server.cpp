@@ -3590,6 +3590,9 @@ void RenderingServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_on_render_thread"), &RenderingServer::is_on_render_thread);
 	ClassDB::bind_method(D_METHOD("call_on_render_thread", "callable"), &RenderingServer::call_on_render_thread);
 
+	ClassDB::bind_method(D_METHOD("set_rendering_threaded", "threaded"), &RenderingServer::set_rendering_threaded);
+	ClassDB::bind_method(D_METHOD("is_rendering_threaded"), &RenderingServer::is_rendering_threaded);
+
 #ifndef DISABLE_DEPRECATED
 	ClassDB::bind_method(D_METHOD("has_feature", "feature"), &RenderingServer::has_feature);
 

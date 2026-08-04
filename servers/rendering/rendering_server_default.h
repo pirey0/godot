@@ -85,6 +85,9 @@ class RenderingServerDefault : public RenderingServer {
 	void _thread_exit();
 	void _thread_loop();
 
+	void _promote_to_threaded();
+	void _demote_from_threaded();
+
 	void _draw(bool p_swap_buffers, double frame_step);
 	void _run_post_draw_steps();
 	void _init();
@@ -1171,6 +1174,11 @@ public:
 
 	virtual bool is_on_render_thread() override {
 		return Thread::get_caller_id() == server_thread;
+	}
+
+	virtual void set_rendering_threaded(bool p_threaded) override;
+	virtual bool is_rendering_threaded() const override {
+		return create_thread;
 	}
 
 	virtual void call_on_render_thread(const Callable &p_callable) override {

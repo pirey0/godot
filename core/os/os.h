@@ -105,6 +105,8 @@ public:
 
 protected:
 	friend class Main;
+	// Needed to keep the flag in sync when the render thread is started at runtime.
+	friend class RenderingServerDefault;
 	// Needed by tests to setup command-line args.
 	friend int test_main(int argc, char *argv[]);
 

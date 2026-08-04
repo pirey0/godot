@@ -416,6 +416,69 @@ void RenderingServerDefault::_thread_loop() {
 	DisplayServer::get_singleton()->release_rendering_thread();
 }
 
+void RenderingServerDefault::_promote_to_threaded() {
+	print_verbose("RenderingServerWrapMT: Starting render thread");
+
+	// Drain anything other threads queued up while we were single threaded.
+	command_queue.flush_all();
+
+	exit = false;
+	DisplayServer::get_singleton()->release_rendering_thread();
+	WorkerThreadPool::TaskID tid = WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &RenderingServerDefault::_thread_loop), true, "Rendering Server pump task", true);
+	command_queue.set_pump_task_id(tid);
+	// Syncs so the render thread owns the RD before any caller observes the new mode.
+	command_queue.push_and_sync(this, &RenderingServerDefault::_assign_mt_ids, tid);
+	DEV_ASSERT(server_task_id == tid);
+
+	create_thread = true;
+	RSG::threaded = true;
+	OS::get_singleton()->_separate_thread_render = true;
+}
+
+void RenderingServerDefault::_demote_from_threaded() {
+	print_verbose("RenderingServerWrapMT: Stopping render thread");
+
+	command_queue.push(this, &RenderingServerDefault::_thread_exit);
+	if (server_task_id != WorkerThreadPool::INVALID_TASK_ID) {
+		WorkerThreadPool::get_singleton()->wait_for_task_completion(server_task_id);
+		server_task_id = WorkerThreadPool::INVALID_TASK_ID;
+	}
+	command_queue.set_pump_task_id(WorkerThreadPool::INVALID_TASK_ID);
+	exit = false;
+
+	create_thread = false;
+	RSG::threaded = false;
+	OS::get_singleton()->_separate_thread_render = false;
+	server_thread = Thread::MAIN_ID;
+
+	// The render thread released these on its way out, take them back.
+	DisplayServer::get_singleton()->gl_window_make_current(DisplayServer::MAIN_WINDOW_ID);
+	RenderingDevice *rd = RenderingDevice::get_singleton();
+	if (rd) {
+		rd->make_current();
+	}
+
+	command_queue.flush_all();
+}
+
+void RenderingServerDefault::set_rendering_threaded(bool p_threaded) {
+	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Switching the rendering thread mode can only be done from the main thread.");
+
+	if (p_threaded == create_thread) {
+		return;
+	}
+
+#ifdef THREADS_ENABLED
+	if (p_threaded) {
+		_promote_to_threaded();
+	} else {
+		_demote_from_threaded();
+	}
+#else
+	ERR_FAIL_MSG("Separate rendering thread is not supported, the engine was built without thread support.");
+#endif
+}
+
 /* INTERPOLATION */
 
 void RenderingServerDefault::set_physics_interpolation_enabled(bool p_enabled) {

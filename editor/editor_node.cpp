@@ -4867,6 +4867,123 @@ Error EditorNode::load_scene(const String &p_scene, bool p_ignore_broken_deps, b
 	return OK;
 }
 
+// Typed Array[Node]/Dictionary[Node,*] properties hold their element references as raw
+// Object pointers, same as a plain Node-typed property. When a scene instance backing such
+// nodes is reloaded (e.g. on reimport), those pointers go stale, so they need to be swapped
+// out for NodePaths across the reload the same way a direct Node reference already is.
+// See https://github.com/godotengine/godot/issues/105002.
+
+static bool _editor_node_is_node_typed_array(const Variant &p_value) {
+	if (p_value.get_type() != Variant::ARRAY) {
+		return false;
+	}
+	Array array = p_value;
+	return array.get_typed_builtin() == Variant::OBJECT && ClassDB::is_parent_class(array.get_typed_class_name(), SNAME("Node"));
+}
+
+static bool _editor_node_is_node_typed_dictionary(const Variant &p_value, bool &r_convert_key, bool &r_convert_value) {
+	r_convert_key = false;
+	r_convert_value = false;
+	if (p_value.get_type() != Variant::DICTIONARY) {
+		return false;
+	}
+	Dictionary dict = p_value;
+	r_convert_key = dict.get_typed_key_builtin() == Variant::OBJECT && ClassDB::is_parent_class(dict.get_typed_key_class_name(), SNAME("Node"));
+	r_convert_value = dict.get_typed_value_builtin() == Variant::OBJECT && ClassDB::is_parent_class(dict.get_typed_value_class_name(), SNAME("Node"));
+	return r_convert_key || r_convert_value;
+}
+
+// Converts Node elements into NodePaths relative to p_relative_to. If p_filter is not null,
+// only elements pointing to a node contained in it are converted (the rest are kept as-is).
+static Array _editor_node_array_nodes_to_paths(const Array &p_array, Node *p_relative_to, const List<Node *> *p_filter, bool &r_converted_any) {
+	Array new_array;
+	for (int i = 0; i < p_array.size(); i++) {
+		Variant elem = p_array[i];
+		Node *n = Object::cast_to<Node>(elem);
+		if (n && (!p_filter || p_filter->find(n))) {
+			new_array.push_back(p_relative_to->get_path_to(n));
+			r_converted_any = true;
+		} else {
+			new_array.push_back(elem);
+		}
+	}
+	return new_array;
+}
+
+static Dictionary _editor_node_dictionary_nodes_to_paths(const Dictionary &p_dict, bool p_convert_key, bool p_convert_value, Node *p_relative_to, const List<Node *> *p_filter, bool &r_converted_any) {
+	Dictionary new_dict;
+	for (const KeyValue<Variant, Variant> &kv : p_dict) {
+		Variant new_key = kv.key;
+		if (p_convert_key) {
+			Node *n = Object::cast_to<Node>(new_key);
+			if (n && (!p_filter || p_filter->find(n))) {
+				new_key = p_relative_to->get_path_to(n);
+				r_converted_any = true;
+			}
+		}
+		Variant new_value = kv.value;
+		if (p_convert_value) {
+			Node *n = Object::cast_to<Node>(new_value);
+			if (n && (!p_filter || p_filter->find(n))) {
+				new_value = p_relative_to->get_path_to(n);
+				r_converted_any = true;
+			}
+		}
+		new_dict[new_key] = new_value;
+	}
+	return new_dict;
+}
+
+// Restores an array of NodePaths (mixed with any non-node elements kept as-is) onto p_property.
+// The property's current value is used as the base so the restored array keeps its declared
+// element type, mirroring how SceneState resolves deferred NodePath array properties on load.
+static void _editor_node_restore_node_array_property(Node *p_node, const StringName &p_property, const Variant &p_paths) {
+	if (p_paths.get_type() != Variant::ARRAY) {
+		return;
+	}
+	Array paths = p_paths;
+
+	bool valid = false;
+	Array array = p_node->get(p_property, &valid);
+	if (!valid) {
+		return;
+	}
+	array = array.duplicate();
+	array.resize(paths.size());
+	for (int i = 0; i < array.size(); i++) {
+		Variant path = paths[i];
+		array.set(i, path.get_type() == Variant::NODE_PATH ? p_node->get_node_or_null(path) : path);
+	}
+	p_node->set(p_property, array);
+}
+
+static void _editor_node_restore_node_dictionary_property(Node *p_node, const StringName &p_property, const Variant &p_paths) {
+	if (p_paths.get_type() != Variant::DICTIONARY) {
+		return;
+	}
+	Dictionary paths = p_paths;
+
+	bool valid = false;
+	Dictionary dict = p_node->get(p_property, &valid);
+	if (!valid) {
+		return;
+	}
+	dict = dict.duplicate();
+	dict.clear();
+	for (const KeyValue<Variant, Variant> &kv : paths) {
+		Variant key = kv.key;
+		if (key.get_type() == Variant::NODE_PATH) {
+			key = p_node->get_node_or_null(key);
+		}
+		Variant value = kv.value;
+		if (value.get_type() == Variant::NODE_PATH) {
+			value = p_node->get_node_or_null(value);
+		}
+		dict[key] = value;
+	}
+	p_node->set(p_property, dict);
+}
+
 HashMap<StringName, Variant> EditorNode::get_modified_properties_for_node(Node *p_node, bool p_node_references_only) {
 	HashMap<StringName, Variant> modified_property_map;
 
@@ -4875,20 +4992,37 @@ HashMap<StringName, Variant> EditorNode::get_modified_properties_for_node(Node *
 	for (const PropertyInfo &E : pinfo) {
 		if (E.usage & PROPERTY_USAGE_STORAGE) {
 			bool node_reference = (E.type == Variant::OBJECT && E.hint == PROPERTY_HINT_NODE_TYPE);
-			if (p_node_references_only && !node_reference) {
+			bool maybe_container_reference = !node_reference && (E.type == Variant::ARRAY || E.type == Variant::DICTIONARY);
+			if (p_node_references_only && !node_reference && !maybe_container_reference) {
 				continue;
 			}
+			Variant current_value = p_node->get(E.name);
+
+			bool convert_key = false;
+			bool convert_value = false;
+			bool is_node_array = maybe_container_reference && _editor_node_is_node_typed_array(current_value);
+			bool is_node_dictionary = maybe_container_reference && !is_node_array && _editor_node_is_node_typed_dictionary(current_value, convert_key, convert_value);
+			if (p_node_references_only && maybe_container_reference && !is_node_array && !is_node_dictionary) {
+				continue;
+			}
+
 			bool is_valid_revert = false;
 			Variant revert_value = EditorPropertyRevert::get_property_revert_value(p_node, E.name, &is_valid_revert);
-			Variant current_value = p_node->get(E.name);
 			if (is_valid_revert) {
 				if (PropertyUtils::is_property_value_different(p_node, current_value, revert_value)) {
-					// If this property is a direct node reference, save a NodePath instead to prevent corrupted references.
+					// If this property is a node reference (directly, or through an array/dictionary),
+					// save NodePaths instead to prevent corrupted references.
 					if (node_reference) {
 						Node *target_node = Object::cast_to<Node>(current_value);
 						if (target_node) {
 							modified_property_map[E.name] = p_node->get_path_to(target_node);
 						}
+					} else if (is_node_array) {
+						bool converted_any = false;
+						modified_property_map[E.name] = _editor_node_array_nodes_to_paths(current_value, p_node, nullptr, converted_any);
+					} else if (is_node_dictionary) {
+						bool converted_any = false;
+						modified_property_map[E.name] = _editor_node_dictionary_nodes_to_paths(current_value, convert_key, convert_value, p_node, nullptr, converted_any);
 					} else {
 						modified_property_map[E.name] = current_value;
 					}
@@ -4906,14 +5040,37 @@ HashMap<StringName, Variant> EditorNode::get_modified_properties_reference_to_no
 	List<PropertyInfo> pinfo;
 	p_node->get_property_list(&pinfo);
 	for (const PropertyInfo &E : pinfo) {
-		if (E.usage & PROPERTY_USAGE_STORAGE) {
-			if (E.type != Variant::OBJECT || E.hint != PROPERTY_HINT_NODE_TYPE) {
-				continue;
-			}
+		if (!(E.usage & PROPERTY_USAGE_STORAGE)) {
+			continue;
+		}
+
+		if (E.type == Variant::OBJECT && E.hint == PROPERTY_HINT_NODE_TYPE) {
 			Variant current_value = p_node->get(E.name);
 			Node *target_node = Object::cast_to<Node>(current_value);
 			if (target_node && p_nodes_referenced_by.find(target_node)) {
 				modified_property_map[E.name] = p_node->get_path_to(target_node);
+			}
+			continue;
+		}
+
+		if (E.type != Variant::ARRAY && E.type != Variant::DICTIONARY) {
+			continue;
+		}
+
+		Variant current_value = p_node->get(E.name);
+		bool convert_key = false;
+		bool convert_value = false;
+		if (_editor_node_is_node_typed_array(current_value)) {
+			bool converted_any = false;
+			Variant converted = _editor_node_array_nodes_to_paths(current_value, p_node, &p_nodes_referenced_by, converted_any);
+			if (converted_any) {
+				modified_property_map[E.name] = converted;
+			}
+		} else if (_editor_node_is_node_typed_dictionary(current_value, convert_key, convert_value)) {
+			bool converted_any = false;
+			Variant converted = _editor_node_dictionary_nodes_to_paths(current_value, convert_key, convert_value, p_node, &p_nodes_referenced_by, converted_any);
+			if (converted_any) {
+				modified_property_map[E.name] = converted;
 			}
 		}
 	}
@@ -4933,31 +5090,54 @@ void EditorNode::update_node_from_node_modification_entry(Node *p_node, Modifica
 		List<PropertyInfo> pinfo;
 		p_node->get_property_list(&pinfo);
 
-		// Get names of all valid property names.
-		HashMap<StringName, bool> property_node_reference_table;
+		// Classify all valid property names by how their node references (if any) need to be restored.
+		enum class PropertyRefKind { NONE,
+			NODE,
+			ARRAY,
+			DICTIONARY };
+		HashMap<StringName, PropertyRefKind> property_node_reference_table;
 		for (const PropertyInfo &E : pinfo) {
-			if (E.usage & PROPERTY_USAGE_STORAGE) {
-				if (E.type == Variant::OBJECT && E.hint == PROPERTY_HINT_NODE_TYPE) {
-					property_node_reference_table[E.name] = true;
-				} else {
-					property_node_reference_table[E.name] = false;
+			if (!(E.usage & PROPERTY_USAGE_STORAGE)) {
+				continue;
+			}
+			PropertyRefKind kind = PropertyRefKind::NONE;
+			if (E.type == Variant::OBJECT && E.hint == PROPERTY_HINT_NODE_TYPE) {
+				kind = PropertyRefKind::NODE;
+			} else if (E.type == Variant::ARRAY || E.type == Variant::DICTIONARY) {
+				Variant current_value = p_node->get(E.name);
+				bool convert_key = false;
+				bool convert_value = false;
+				if (_editor_node_is_node_typed_array(current_value)) {
+					kind = PropertyRefKind::ARRAY;
+				} else if (_editor_node_is_node_typed_dictionary(current_value, convert_key, convert_value)) {
+					kind = PropertyRefKind::DICTIONARY;
 				}
 			}
+			property_node_reference_table[E.name] = kind;
 		}
 
 		// Restore the modified properties for this node.
 		for (const KeyValue<StringName, Variant> &E : p_node_modification.property_table) {
-			bool *property_node_reference_table_entry = property_node_reference_table.getptr(E.key);
-			if (property_node_reference_table_entry) {
-				// If the property is a node reference, attempt to restore from the node path instead.
-				bool is_node_reference = *property_node_reference_table_entry;
-				if (is_node_reference) {
+			PropertyRefKind *kind = property_node_reference_table.getptr(E.key);
+			if (!kind) {
+				continue;
+			}
+			switch (*kind) {
+				case PropertyRefKind::NODE:
+					// If the property is a node reference, attempt to restore from the node path instead.
 					if (E.value.get_type() == Variant::NODE_PATH) {
 						p_node->set(E.key, p_node->get_node_or_null(E.value));
 					}
-				} else {
+					break;
+				case PropertyRefKind::ARRAY:
+					_editor_node_restore_node_array_property(p_node, E.key, E.value);
+					break;
+				case PropertyRefKind::DICTIONARY:
+					_editor_node_restore_node_dictionary_property(p_node, E.key, E.value);
+					break;
+				case PropertyRefKind::NONE:
 					p_node->set(E.key, E.value);
-				}
+					break;
 			}
 		}
 

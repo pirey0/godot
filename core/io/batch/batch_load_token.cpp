@@ -45,9 +45,6 @@ void BatchLoadToken::_bind_methods() {
 }
 
 float BatchLoadToken::get_progress() const {
-	// total_count is 0 both before scanning has determined the real total, and
-	// for a batch that turns out to have nothing to load -- those need opposite
-	// answers, so status disambiguates rather than treating total==0 as "done".
 	Status s = get_status();
 	if (s == STATUS_QUEUED || s == STATUS_SCANNING) {
 		return 0.0f;

@@ -30,7 +30,6 @@
 
 #include "batch_threaded_resource_loader.h"
 
-#include "core/io/batch/dependency_manifest.h"
 #include "core/io/resource_loader.h"
 #include "core/object/callable_method_pointer.h"
 #include "core/object/script_language.h"
@@ -46,9 +45,7 @@ void BatchThreadedResourceLoader::_thread_func(void *p_userdata) {
 }
 
 void BatchThreadedResourceLoader::_run() {
-	// Required before this thread can safely load scripts: WorkerThreadPool does this
-	// automatically for its own worker threads, but this is a plain OS thread, not a
-	// pool worker, and .gd loads are routed here specifically (see _process_request).
+	// WorkerThreadPool does this for its own workers automatically; this plain OS thread needs it explicit.
 	ScriptServer::thread_enter();
 
 	while (true) {
@@ -70,30 +67,80 @@ void BatchThreadedResourceLoader::_run() {
 	ScriptServer::thread_exit();
 }
 
-void BatchThreadedResourceLoader::_load_path(const String &p_path) {
-	CharString profile_path_utf8 = p_path.utf8();
-	GodotProfileZoneDynamic("BatchThreadedResourceLoader::_load_path", profile_path_utf8.get_data(), profile_path_utf8.length());
-
-	// load_inline(), not load(): this may run inside a WorkerThreadPool group task,
-	// and load() would otherwise register a second, competing task in the same
-	// pool for every single item. See resource_loader.h for the full rationale.
-	Error err = OK;
-	Ref<Resource> res = ResourceLoader::load_inline(p_path, "", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
-	if (err != OK || res.is_null()) {
-		ERR_PRINT(vformat("BatchThreadedResourceLoader: failed to load '%s' (err=%d, res_null=%s)", p_path, (int)err, res.is_null()));
-		current_layer_failed.set();
-		return;
-	}
-
-	{
-		MutexLock lock(current_results_mutex);
-		current_results[p_path] = res;
-	}
-	current_token->mark_items_completed(1);
+void BatchThreadedResourceLoader::_dispatch_index(int p_index) {
+	WorkerThreadPool::get_singleton()->add_task(callable_mp(this, &BatchThreadedResourceLoader::_load_index).bind(p_index));
 }
 
-void BatchThreadedResourceLoader::_load_one_item(int p_index) {
-	_load_path((*current_layer)[p_index]);
+bool BatchThreadedResourceLoader::_load_resource(const String &p_path) {
+	CharString profile_path_utf8 = p_path.utf8();
+	GodotProfileZoneDynamic("BatchThreadedResourceLoader::_load_resource", profile_path_utf8.get_data(), profile_path_utf8.length());
+
+	// load_inline(), not load(): avoids registering a second, competing pool task per item.
+	Error err = OK;
+	Ref<Resource> res = ResourceLoader::load_inline(p_path, "", ResourceFormatLoader::CACHE_MODE_REUSE, &err);
+	bool success = err == OK && res.is_valid();
+
+	if (!success) {
+		ERR_PRINT(vformat("BatchThreadedResourceLoader: failed to load '%s' (err=%d, res_null=%s)", p_path, (int)err, res.is_null()));
+	} else {
+		{
+			MutexLock lock(current_results_mutex);
+			current_results[p_path] = res;
+		}
+		current_token->mark_items_completed(1);
+	}
+	return success;
+}
+
+void BatchThreadedResourceLoader::_load_index(int p_index) {
+	bool success = _load_resource(current_manifest->paths[p_index]);
+	_finish_index(p_index, success);
+}
+
+void BatchThreadedResourceLoader::_run_combined_script_node(int p_index) {
+	GodotProfileZone("BatchThreadedResourceLoader: combined script node");
+
+	bool all_success = true;
+	for (const String &path : current_manifest->script_paths) {
+		if (current_batch_failed.is_set()) {
+			all_success = false;
+			break;
+		}
+		if (!_load_resource(path)) {
+			all_success = false;
+		}
+	}
+
+	_finish_index(p_index, all_success);
+}
+
+void BatchThreadedResourceLoader::_finish_index(int p_index, bool p_success) {
+	if (!p_success) {
+		current_batch_failed.set();
+	}
+
+	Vector<int> newly_ready;
+	if (p_success) {
+		MutexLock lock(scheduling_mutex);
+		for (int dependent : current_manifest->dependents[p_index]) {
+			remaining_in_degree.write[dependent] -= 1;
+			if (remaining_in_degree[dependent] == 0) {
+				newly_ready.push_back(dependent);
+			}
+		}
+	}
+
+	if (!current_batch_failed.is_set()) {
+		for (int idx : newly_ready) {
+			pending_count.add(1);
+			_dispatch_index(idx);
+		}
+	}
+
+	// Reaches zero exactly when no more dispatched work remains anywhere.
+	if (pending_count.add(-1) == 0) {
+		completion_semaphore.post();
+	}
 }
 
 void BatchThreadedResourceLoader::_process_request(Request &p_request) {
@@ -102,101 +149,66 @@ void BatchThreadedResourceLoader::_process_request(Request &p_request) {
 	Ref<BatchLoadToken> token = p_request.token;
 	token->set_status(BatchLoadToken::STATUS_SCANNING);
 
-	Vector<DependencyManifest> subgraphs;
-	for (const String &root : p_request.roots) {
-		subgraphs.push_back(DependencyManifest::load_or_build(root));
-	}
-
-	DependencyManifest merged = DependencyManifest::merge(subgraphs);
-	if (!merged.compute_layers()) {
+	DependencyManifest manifest;
+	if (!DependencyManifest::load_or_build(p_request.roots, manifest)) {
 		ERR_PRINT("BatchThreadedResourceLoader: dependency cycle detected in requested roots, aborting batch.");
 		token->set_status(BatchLoadToken::STATUS_FAILED);
 		token->call_deferred(SNAME("emit_signal"), SNAME("completed"));
 		return;
 	}
 
-	uint32_t total = 0;
-	for (const Vector<String> &layer : merged.layers) {
-		total += layer.size();
-	}
-	token->set_total((int)total);
+	int total = manifest.paths.size();
+	token->set_total(total);
 	token->set_status(BatchLoadToken::STATUS_LOADING);
 
-	current_results.clear();
+	current_manifest = &manifest;
 	current_token = token.ptr();
-	bool failed = false;
+	current_results.clear();
+	current_batch_failed.clear();
+	pending_count.set(0);
 
-	for (const Vector<String> &layer : merged.layers) {
-		GodotProfileZone("BatchThreadedResourceLoader: layer");
-		if (layer.is_empty()) {
-			continue;
-		}
+	remaining_in_degree = manifest.in_degree;
 
-		// .gd files are pulled out and loaded serially, right here, in order: GDScriptParser::
-		// get_dependencies() never reports a script's real extends/preload targets, so scripts
-		// can't be safely ordered or parallelized against each other via this graph. Everything
-		// else still loads in parallel via the group task below, running concurrently with the
-		// serial script loop.
-		Vector<String> scripts;
-		Vector<String> parallel_items;
-		for (const String &path : layer) {
-			if (path.get_extension() == "gd") {
-				scripts.push_back(path);
-			} else {
-				parallel_items.push_back(path);
-			}
-		}
+	if (total > 0) {
+		pending_count.add(1);
 
-		current_layer = &parallel_items;
-		current_layer_failed.clear();
-
-		bool has_group = !parallel_items.is_empty();
-		WorkerThreadPool::GroupID group = -1;
-		if (has_group) {
-			group = WorkerThreadPool::get_singleton()->add_group_task(
-					callable_mp(this, &BatchThreadedResourceLoader::_load_one_item),
-					parallel_items.size());
-		}
-
-		if (!scripts.is_empty()) {
-			GodotProfileZone("BatchThreadedResourceLoader: serial script batch");
-			for (const String &script_path : scripts) {
-				_load_path(script_path);
-				if (current_layer_failed.is_set()) {
-					break;
+		{
+			GodotProfileZone("BatchThreadedResourceLoader: dispatch initial ready set");
+			for (int idx : manifest.initial_ready) {
+				if (idx == manifest.combined_script_index) {
+					continue;
 				}
+				pending_count.add(1);
+				_dispatch_index(idx);
 			}
 		}
 
-		if (has_group) {
-			GodotProfileZone("BatchThreadedResourceLoader: wait for group task");
-			WorkerThreadPool::get_singleton()->wait_for_group_task_completion(group);
+		if (manifest.combined_script_index != -1) {
+			// Runs serially on this thread, concurrently with everything dispatched to the pool above.
+			pending_count.add(1);
+			_run_combined_script_node(manifest.combined_script_index);
 		}
 
-		if (current_layer_failed.is_set()) {
-			failed = true;
-			break;
+		if (pending_count.add(-1) == 0) {
+			completion_semaphore.post();
+		}
+
+		{
+			GodotProfileZone("BatchThreadedResourceLoader: wait for completion");
+			completion_semaphore.wait();
 		}
 	}
 
-	current_layer = nullptr;
+	current_manifest = nullptr;
 	current_token = nullptr;
 
-	if (failed) {
+	if (current_batch_failed.is_set()) {
 		token->set_status(BatchLoadToken::STATUS_FAILED);
 	} else {
-		// duplicate(), not a plain copy: Dictionary is a shared reference type in Godot
-		// (like Array), so a plain assignment would leave current_results.clear() below
-		// wiping out the token's results too, since they'd be the same underlying data.
 		token->set_results(current_results.duplicate());
 		token->set_status(BatchLoadToken::STATUS_DONE);
 	}
-	// current_results is a member (reused across requests via the FIFO queue), not
-	// request-local -- clear it now so it never holds resource references (scripts,
-	// in particular) any longer than the single request that produced them. Otherwise
-	// it can end up as the last live reference to a Resource at engine shutdown, and
-	// this class (living in core) is destroyed after modules like GDScript have
-	// already finalized -- dropping a Script reference at that point crashes.
+	// Clear now so this member never outlives the request
 	current_results.clear();
 	token->call_deferred(SNAME("emit_signal"), SNAME("completed"));
 }

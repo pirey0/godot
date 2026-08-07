@@ -31,37 +31,17 @@
 #pragma once
 
 #include "core/io/batch/batch_load_token.h"
+#include "core/io/batch/dependency_manifest.h"
 #include "core/object/ref_counted.h"
 #include "core/os/condition_variable.h"
 #include "core/os/mutex.h"
+#include "core/os/semaphore.h"
 #include "core/os/thread.h"
 #include "core/templates/list.h"
 #include "core/templates/safe_refcount.h"
 #include "core/templates/vector.h"
 #include "core/variant/dictionary.h"
 
-// Standalone batch-loading facade: a single persistent background thread
-// consumes a FIFO queue of load(roots) requests. Each request's dependency
-// graph is precomputed and topologically layered up front (see
-// DependencyManifest), then dispatched bottom-up as WorkerThreadPool group
-// tasks, one per layer -- every dependency a layer needs is already
-// ResourceCache-resident by construction, so no load ever waits on a sibling.
-// Items are loaded via ResourceLoader::load_inline(), which always runs on
-// the calling (pool) thread instead of registering a second, competing task
-// the way plain load() would from inside a pool task.
-//
-// .gd files are the one exception: GDScriptParser::get_dependencies() is an
-// unimplemented stub (always empty), so a script's real extends/preload
-// targets are invisible to this graph and can't be safely parallelized
-// against each other -- concurrently compiling two interdependent scripts
-// can pile both up on GDScriptCache's own global compile mutex with neither
-// able to proceed. So within each layer, .gd paths are loaded serially, in
-// order, right here on this thread -- never on the main thread, which would
-// otherwise freeze for the whole script batch -- running concurrently with
-// the parallel group task for everything else in the same layer.
-// ScriptServer::thread_enter()/thread_exit() bracket this thread's lifetime,
-// the same requirement WorkerThreadPool satisfies automatically for its own
-// workers before running anything that touches scripting.
 class BatchThreadedResourceLoader : public Object {
 	GDCLASS(BatchThreadedResourceLoader, Object);
 
@@ -72,27 +52,33 @@ class BatchThreadedResourceLoader : public Object {
 
 	static inline BatchThreadedResourceLoader *singleton = nullptr;
 
-	BinaryMutex queue_mutex; // Non-recursive: paired with queue_cv, which requires it.
+	BinaryMutex queue_mutex;
 	ConditionVariable queue_cv;
 	List<Request> pending_queue;
 	bool exit_thread = false;
 	Thread worker_thread;
 
-	// Transient state for the layer currently being loaded. The queue is
-	// strictly FIFO -- only one batch is ever in flight -- so plain members
-	// are safe here; only the results dict needs a lock, since multiple
-	// group-task workers write different keys into it concurrently.
-	const Vector<String> *current_layer = nullptr;
+	const DependencyManifest *current_manifest = nullptr;
 	BatchLoadToken *current_token = nullptr;
-	Mutex current_results_mutex;
+
+	Mutex current_results_mutex; // Guards current_results (write-only, keyed by path).
 	Dictionary current_results;
-	SafeFlag current_layer_failed;
+
+	Mutex scheduling_mutex; // Guards remaining_in_degree (read-modify-write per completion).
+	Vector<int> remaining_in_degree;
+
+	SafeNumeric<int> pending_count; // Nodes dispatched but not finished; zero means no work left.
+	Semaphore completion_semaphore;
+	SafeFlag current_batch_failed;
 
 	static void _thread_func(void *p_userdata);
 	void _run();
 	void _process_request(Request &p_request);
-	void _load_path(const String &p_path);
-	void _load_one_item(int p_index);
+	void _dispatch_index(int p_index);
+	void _load_index(int p_index);
+	bool _load_resource(const String &p_path);
+	void _run_combined_script_node(int p_index);
+	void _finish_index(int p_index, bool p_success);
 
 protected:
 	static void _bind_methods();

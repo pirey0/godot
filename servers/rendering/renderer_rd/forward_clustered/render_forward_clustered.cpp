@@ -4891,6 +4891,14 @@ uint32_t RenderForwardClustered::geometry_instance_get_pair_mask() {
 	return (1 << RS::INSTANCE_VOXEL_GI);
 }
 
+bool RenderForwardClustered::skip_pipeline_wait = false;
+
+// See rendering_server.cpp's forward declaration / RenderingServer::set_skip_mesh_pipeline_wait
+// for the caller-facing side of this narrow hack.
+void render_forward_clustered_set_skip_pipeline_wait(bool p_skip) {
+	RenderForwardClustered::skip_pipeline_wait = p_skip;
+}
+
 void RenderForwardClustered::mesh_generate_pipelines(RID p_mesh, bool p_background_compilation) {
 	RendererRD::MaterialStorage *material_storage = RendererRD::MaterialStorage::get_singleton();
 	RendererRD::MeshStorage *mesh_storage = RendererRD::MeshStorage::get_singleton();
@@ -4940,7 +4948,7 @@ void RenderForwardClustered::mesh_generate_pipelines(RID p_mesh, bool p_backgrou
 	}
 
 	// Wait for all the pipelines that were compiled. This will force the loader to wait on all ubershader pipelines to be ready.
-	if (!p_background_compilation && !pipeline_pairs.is_empty()) {
+	if (!p_background_compilation && !skip_pipeline_wait && !pipeline_pairs.is_empty()) {
 		for (ShaderPipelinePair pair : pipeline_pairs) {
 			pair.first->pipeline_hash_map.wait_for_pipeline(pair.second.hash());
 		}

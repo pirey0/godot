@@ -36,6 +36,11 @@
 #include "servers/rendering/shader_language.h"
 #include "servers/rendering/shader_warnings.h"
 
+// Narrow hack -- see render_forward_clustered.cpp for the definition and rationale
+// (RenderForwardClustered::skip_pipeline_wait). Forward-declared instead of pulling
+// in render_forward_clustered.h's full RD/shader-codegen include chain here.
+void render_forward_clustered_set_skip_pipeline_wait(bool p_skip);
+
 RenderingServer *RenderingServer::singleton = nullptr;
 RenderingServer *(*RenderingServer::create_func)() = nullptr;
 
@@ -2135,6 +2140,10 @@ String RenderingServer::get_current_rendering_method() const {
 	return ::OS::get_singleton()->get_current_rendering_method();
 }
 
+void RenderingServer::set_skip_mesh_pipeline_wait(bool p_skip) {
+	render_forward_clustered_set_skip_pipeline_wait(p_skip);
+}
+
 Vector<uint8_t> _convert_surface_version_1_to_surface_version_2(uint64_t p_format, Vector<uint8_t> p_vertex_data, uint32_t p_vertex_count, uint32_t p_old_stride, uint32_t p_vertex_size, uint32_t p_normal_size, uint32_t p_position_stride, uint32_t p_normal_tangent_stride) {
 	Vector<uint8_t> new_vertex_data;
 	new_vertex_data.resize(p_vertex_data.size());
@@ -2389,6 +2398,7 @@ void RenderingServer::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("mesh_create_from_surfaces", "surfaces", "blend_shape_count"), &RenderingServer::_mesh_create_from_surfaces, DEFVAL(0));
 	ClassDB::bind_method(D_METHOD("mesh_create"), &RenderingServer::mesh_create);
+	ClassDB::bind_method(D_METHOD("set_skip_mesh_pipeline_wait", "skip"), &RenderingServer::set_skip_mesh_pipeline_wait);
 	ClassDB::bind_method(D_METHOD("mesh_surface_get_format_offset", "format", "vertex_count", "array_index"), &RenderingServer::mesh_surface_get_format_offset);
 	ClassDB::bind_method(D_METHOD("mesh_surface_get_format_vertex_stride", "format", "vertex_count"), &RenderingServer::mesh_surface_get_format_vertex_stride);
 	ClassDB::bind_method(D_METHOD("mesh_surface_get_format_normal_tangent_stride", "format", "vertex_count"), &RenderingServer::mesh_surface_get_format_normal_tangent_stride);

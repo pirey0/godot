@@ -828,6 +828,17 @@ public:
 
 	/* PIPELINES */
 
+	// Narrow hack for BatchThreadedResourceLoader's preloader batch: mesh_generate_pipelines()
+	// below normally blocks the calling thread until every newly-queued pipeline compile
+	// finishes, which deadlocks under the batch dataflow scheduler (a compile task can end up
+	// queued behind other in-flight loads on the same low-priority-capped WorkerThreadPool,
+	// and waiting on it synchronously is waiting on a thread with no room left to run the
+	// thing that unblocks it). Set true only for the duration of the preloader's Loading phase
+	// (see RenderingServer::set_skip_mesh_pipeline_wait, called from PreloaderStage.gd) --
+	// safe because unfinished specialized pipelines transparently fall back to the ubershader
+	// until PreloaderStage's separate PipelineWarmup phase forces them for real.
+	static bool skip_pipeline_wait;
+
 	virtual void mesh_generate_pipelines(RID p_mesh, bool p_background_compilation) override;
 	virtual uint32_t get_pipeline_compilations(RS::PipelineSource p_source) override;
 

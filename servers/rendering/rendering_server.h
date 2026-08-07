@@ -1894,6 +1894,13 @@ public:
 	String get_current_rendering_driver_name() const;
 	String get_current_rendering_method() const;
 
+	// Narrow hack, not a general-purpose API: lets the preloader's batch loader (see
+	// BatchThreadedResourceLoader / PreloaderStage.gd) skip RenderForwardClustered's
+	// synchronous wait for newly-queued mesh pipeline compiles, which deadlocks under
+	// the batch dataflow scheduler. See RenderForwardClustered::skip_pipeline_wait
+	// for the full rationale. No-op on any other renderer backend.
+	void set_skip_mesh_pipeline_wait(bool p_skip);
+
 #ifdef TOOLS_ENABLED
 	virtual void get_argument_options(const StringName &p_function, int p_idx, List<String> *r_options) const override;
 #endif

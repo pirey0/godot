@@ -605,7 +605,7 @@ void RendererSceneCull::instance_set_base(RID p_instance, RID p_base) {
 
 #ifdef DEBUG_ENABLED
 				if (light->geometries.size()) {
-					//ERR_PRINT("BUG, indexing did not unpair geometries from light.");
+					ERR_PRINT("BUG, indexing did not unpair geometries from light.");
 				}
 #endif
 				if (scenario && light->D) {
@@ -833,7 +833,7 @@ void RendererSceneCull::instance_set_scenario(RID p_instance, RID p_scenario) {
 
 #ifdef DEBUG_ENABLED
 				if (light->geometries.size()) {
-					//ERR_PRINT("BUG, indexing did not unpair geometries from light.");
+					ERR_PRINT("BUG, indexing did not unpair geometries from light.");
 				}
 #endif
 				if (light->D) {
@@ -920,10 +920,9 @@ void RendererSceneCull::instance_set_layer_mask(RID p_instance, uint32_t p_mask)
 		return;
 	}
 
-	// Particles always need to be unpaired. Geometry may need to be unpaired, but only if lights or decals use pairing.
+	// Particles and geometries need to be unpaired.
 	// Needs to happen before layer mask changes so we can avoid attempting to unpair something that was never paired.
-	if (instance->base_type == RS::INSTANCE_PARTICLES ||
-			(((geometry_instance_pair_mask & (1 << RS::INSTANCE_LIGHT)) || (geometry_instance_pair_mask & (1 << RS::INSTANCE_DECAL))) && ((1 << instance->base_type) & RS::INSTANCE_GEOMETRY_MASK))) {
+	if (instance->base_type == RS::INSTANCE_PARTICLES || ((1 << instance->base_type) & RS::INSTANCE_GEOMETRY_MASK)) {
 		_unpair_instance(instance);
 		singleton->_instance_queue_update(instance, false, false);
 	}

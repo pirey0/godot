@@ -37,6 +37,7 @@
 #include "audio/audio_server.h"
 #include "audio/audio_stream.h"
 #include "audio/effects/audio_effect_amplify.h"
+#include "audio/effects/audio_effect_bus_tap.h"
 #include "audio/effects/audio_effect_capture.h"
 #include "audio/effects/audio_effect_chorus.h"
 #include "audio/effects/audio_effect_compressor.h"
@@ -52,6 +53,7 @@
 #include "audio/effects/audio_effect_reverb.h"
 #include "audio/effects/audio_effect_spectrum_analyzer.h"
 #include "audio/effects/audio_effect_stereo_enhance.h"
+#include "audio/effects/audio_stream_bus_tap.h"
 #include "audio/effects/audio_stream_generator.h"
 #include "camera/camera_feed.h"
 #include "camera/camera_server.h"
@@ -179,6 +181,9 @@ void register_server_types() {
 	GDREGISTER_CLASS(AudioStreamGenerator);
 	GDREGISTER_ABSTRACT_CLASS(AudioStreamGeneratorPlayback);
 
+	GDREGISTER_CLASS(AudioStreamBusTap);
+	GDREGISTER_ABSTRACT_CLASS(AudioStreamBusTapPlayback);
+
 	{
 		//audio effects
 		GDREGISTER_CLASS(AudioEffectAmplify);
@@ -213,6 +218,7 @@ void register_server_types() {
 		GDREGISTER_ABSTRACT_CLASS(AudioEffectSpectrumAnalyzerInstance);
 
 		GDREGISTER_CLASS(AudioEffectCapture);
+		GDREGISTER_CLASS(AudioEffectBusTap);
 
 #ifndef DISABLE_DEPRECATED
 		GDREGISTER_CLASS(AudioEffectLimiter);

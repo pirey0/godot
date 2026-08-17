@@ -7028,7 +7028,9 @@ void RenderingDevice::_stall_for_frame(uint32_t p_frame) {
 					array_offset += region.size;
 				}
 
-				request.callback.call(packed_byte_array);
+				if (request.callback.is_valid()) {
+					request.callback.call(packed_byte_array);
+				}
 			}
 
 			frames[p_frame].download_buffer_staging_buffers.clear();
@@ -7079,7 +7081,9 @@ void RenderingDevice::_stall_for_frame(uint32_t p_frame) {
 					driver->buffer_unmap(frames[p_frame].download_texture_staging_buffers[local_index]);
 				}
 
-				request.callback.call(packed_byte_array);
+				if (request.callback.is_valid()) {
+					request.callback.call(packed_byte_array);
+				}
 			}
 
 			GodotProfileZoneGrouped(_profile_zone, "clear buffers");

@@ -4989,6 +4989,11 @@ void RenderingDevice::draw_list_set_push_constant(DrawListID p_list, const void 
 
 	ERR_FAIL_COND(!draw_list.active);
 
+	// Not DEBUG_ENABLED-only: draw_list_bind_render_pipeline() leaves this unset when it
+	// rejects an invalid pipeline RID, and the backends dereference it raw, so recording
+	// a null shader id here faults later in _end_frame().
+	ERR_FAIL_COND_MSG(!draw_list.state.pipeline_shader_driver_id, "No render pipeline was bound before setting a push constant.");
+
 #ifdef DEBUG_ENABLED
 	ERR_FAIL_COND_MSG(p_data_size != draw_list.validation.pipeline_push_constant_size,
 			"This render pipeline requires (" + itos(draw_list.validation.pipeline_push_constant_size) + ") bytes of push constant data, supplied: (" + itos(p_data_size) + ")");
@@ -5516,6 +5521,8 @@ void RenderingDevice::compute_list_set_push_constant(ComputeListID p_list, const
 	ERR_FAIL_COND(p_list != ID_TYPE_COMPUTE_LIST);
 	ERR_FAIL_COND(!compute_list.active);
 	ERR_FAIL_COND_MSG(p_data_size > MAX_PUSH_CONSTANT_SIZE, "Push constants can't be bigger than 128 bytes to maintain compatibility.");
+	// See draw_list_set_push_constant().
+	ERR_FAIL_COND_MSG(!compute_list.state.pipeline_shader_driver_id, "No compute pipeline was bound before setting a push constant.");
 
 #ifdef DEBUG_ENABLED
 	ERR_FAIL_COND_MSG(p_data_size != compute_list.validation.pipeline_push_constant_size,
@@ -5635,6 +5642,7 @@ void RenderingDevice::compute_list_dispatch(ComputeListID p_list, uint32_t p_x_g
 				draw_graph.add_compute_list_bind_uniform_set(compute_list.state.pipeline_shader_driver_id, compute_list.state.sets[i].uniform_set_driver_id, i);
 			}
 			UniformSet *uniform_set = uniform_set_owner.get_or_null(compute_list.state.sets[i].uniform_set);
+			ERR_FAIL_NULL(uniform_set);
 			_uniform_set_update_shared(uniform_set);
 			_uniform_set_update_clears(uniform_set);
 
@@ -5772,6 +5780,7 @@ void RenderingDevice::compute_list_dispatch_indirect(ComputeListID p_list, RID p
 			last_set_index = i;
 
 			UniformSet *uniform_set = uniform_set_owner.get_or_null(compute_list.state.sets[i].uniform_set);
+			ERR_FAIL_NULL(uniform_set);
 			_uniform_set_update_shared(uniform_set);
 			_uniform_set_update_clears(uniform_set);
 
@@ -7028,7 +7037,9 @@ void RenderingDevice::_stall_for_frame(uint32_t p_frame) {
 					array_offset += region.size;
 				}
 
-				request.callback.call(packed_byte_array);
+				if (request.callback.is_valid()) {
+					request.callback.call(packed_byte_array);
+				}
 			}
 
 			frames[p_frame].download_buffer_staging_buffers.clear();
@@ -7079,7 +7090,9 @@ void RenderingDevice::_stall_for_frame(uint32_t p_frame) {
 					driver->buffer_unmap(frames[p_frame].download_texture_staging_buffers[local_index]);
 				}
 
-				request.callback.call(packed_byte_array);
+				if (request.callback.is_valid()) {
+					request.callback.call(packed_byte_array);
+				}
 			}
 
 			GodotProfileZoneGrouped(_profile_zone, "clear buffers");

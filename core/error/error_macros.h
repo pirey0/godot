@@ -99,7 +99,11 @@ void _physics_interpolation_warning(const char *p_function, const char *p_file, 
 /**
  * Don't use GENERATE_TRAP() directly, should only be used be the macros below.
  */
-#define GENERATE_TRAP() __fastfail(7 /* FAST_FAIL_FATAL_APP_EXIT */)
+#define GENERATE_TRAP()                               \
+	do {                                              \
+		__debugbreak();                               \
+		__fastfail(7 /* FAST_FAIL_FATAL_APP_EXIT */); \
+	} while (0)
 #else
 /**
  * Don't use GENERATE_TRAP() directly, should only be used be the macros below.

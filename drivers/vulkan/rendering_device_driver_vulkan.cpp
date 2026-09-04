@@ -2756,12 +2756,15 @@ RDD::FenceID RenderingDeviceDriverVulkan::fence_create() {
 Error RenderingDeviceDriverVulkan::fence_wait(FenceID p_fence) {
 	Fence *fence = (Fence *)(p_fence.id);
 	VkResult fence_status = vkGetFenceStatus(vk_device, fence->vk_fence);
+	_check_device_lost(fence_status);
 	if (fence_status == VK_NOT_READY) {
 		VkResult err = vkWaitForFences(vk_device, 1, &fence->vk_fence, VK_TRUE, UINT64_MAX);
+		_check_device_lost(err);
 		ERR_FAIL_COND_V(err != VK_SUCCESS, FAILED);
 	}
 
 	VkResult err = vkResetFences(vk_device, 1, &fence->vk_fence);
+	_check_device_lost(err);
 	ERR_FAIL_COND_V(err != VK_SUCCESS, FAILED);
 
 	if (fence->queue_signaled_from != nullptr) {
@@ -2969,10 +2972,7 @@ Error RenderingDeviceDriverVulkan::command_queue_execute_and_present(CommandQueu
 		err = vkQueueSubmit(device_queue.queue, 1, &submit_info, vk_fence);
 		device_queue.submit_mutex.unlock();
 
-		if (err == VK_ERROR_DEVICE_LOST) {
-			print_lost_device_info();
-			CRASH_NOW_MSG("Vulkan device was lost.");
-		}
+		_check_device_lost(err);
 		ERR_FAIL_COND_V(err != VK_SUCCESS, FAILED);
 
 		if (fence != nullptr && !command_queue->pending_semaphores_for_fence.is_empty()) {
@@ -6143,6 +6143,14 @@ void RenderingDeviceDriverVulkan::on_device_lost() const {
 	}
 
 	_err_print_error(FUNCTION_STR, __FILE__, __LINE__, context_driver->get_driver_and_device_memory_report());
+}
+
+void RenderingDeviceDriverVulkan::_check_device_lost(VkResult p_result) {
+	if (p_result != VK_ERROR_DEVICE_LOST) {
+		return;
+	}
+	print_lost_device_info();
+	CRASH_NOW_MSG("Vulkan device was lost.");
 }
 
 void RenderingDeviceDriverVulkan::print_lost_device_info() {

@@ -40,10 +40,14 @@
 
 #ifdef CRASH_HANDLER_EXCEPTION
 
+#include <wchar.h>
+#include <cstdlib>
+
+#ifdef DEBUG_ENABLED
+
 // Backtrace code based on: https://stackoverflow.com/questions/6205981/windows-c-stack-trace-from-a-running-app
 
 #include <algorithm>
-#include <cstdlib>
 #include <iterator>
 #include <string>
 #include <vector>
@@ -117,7 +121,7 @@ public:
 	}
 };
 
-DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
+static void dump_backtrace(EXCEPTION_POINTERS *ep) {
 	HANDLE process = GetCurrentProcess();
 	HANDLE hThread = GetCurrentThread();
 	DWORD offset_from_symbol = 0;
@@ -126,22 +130,9 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 	DWORD cbNeeded;
 	std::vector<HMODULE> module_handles(1);
 
-	if (OS::get_singleton() == nullptr || OS::get_singleton()->is_disable_crash_handler() || IsDebuggerPresent()) {
-		return EXCEPTION_CONTINUE_SEARCH;
-	}
-
-	if (OS::get_singleton()->is_crash_handler_silent()) {
-		std::_Exit(0);
-	}
-
 	String msg;
 	if (ProjectSettings::get_singleton()) {
 		msg = GLOBAL_GET("debug/settings/crash_handler/message");
-	}
-
-	// Tell MainLoop about the crash. This can be handled by users too in Node.
-	if (OS::get_singleton()->get_main_loop()) {
-		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_CRASH);
 	}
 
 	print_error("\n================================================================");
@@ -157,7 +148,7 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 
 	// Load the symbols:
 	if (!SymInitialize(process, nullptr, false)) {
-		return EXCEPTION_CONTINUE_SEARCH;
+		return;
 	}
 
 	SymSetOptions(SymGetOptions() | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_EXACT_SYMBOLS);
@@ -238,6 +229,62 @@ DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
 			print_error("================================================================");
 		}
 	}
+}
+
+#endif // DEBUG_ENABLED
+
+#ifndef TOOLS_ENABLED
+
+static void launch_crash_reporter() {
+	const WCHAR *own_cmdline = GetCommandLineW();
+	if (own_cmdline != nullptr && wcsstr(own_cmdline, L"--crash_report") != nullptr) {
+		return;
+	}
+
+	WCHAR exe_path[MAX_PATH];
+	const DWORD exe_len = GetModuleFileNameW(nullptr, exe_path, MAX_PATH);
+	if (exe_len == 0 || exe_len >= MAX_PATH) {
+		return;
+	}
+
+	WCHAR cmdline[MAX_PATH + 256];
+	swprintf_s(cmdline, L"\"%s\" --rendering-method gl_compatibility -- --crash_report --crash_pid=%lu", exe_path, GetCurrentProcessId());
+
+	STARTUPINFOW si = {};
+	si.cb = sizeof(si);
+	PROCESS_INFORMATION pi = {};
+
+	if (CreateProcessW(exe_path, cmdline, nullptr, nullptr, FALSE, DETACHED_PROCESS, nullptr, nullptr, &si, &pi)) {
+		CloseHandle(pi.hThread);
+		CloseHandle(pi.hProcess);
+	}
+}
+
+#endif // !TOOLS_ENABLED
+
+DWORD CrashHandlerException(EXCEPTION_POINTERS *ep) {
+	if (OS::get_singleton() == nullptr || OS::get_singleton()->is_disable_crash_handler() || IsDebuggerPresent()) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	if (OS::get_singleton()->is_crash_handler_silent()) {
+		std::_Exit(0);
+	}
+
+	// Tell MainLoop about the crash. This can be handled by users too in Node.
+	if (OS::get_singleton()->get_main_loop()) {
+		OS::get_singleton()->get_main_loop()->notification(MainLoop::NOTIFICATION_CRASH);
+	}
+
+#ifdef DEBUG_ENABLED
+	dump_backtrace(ep);
+#else
+	(void)ep;
+#endif
+
+#ifndef TOOLS_ENABLED
+	launch_crash_reporter();
+#endif
 
 	// Pass the exception to the OS
 	return EXCEPTION_CONTINUE_SEARCH;

@@ -33,6 +33,7 @@
 #import "metal_device_profile.h"
 #import "metal_objects.h"
 
+#include "core/os/mutex.h"
 #include "servers/rendering/rendering_device_driver.h"
 
 #import <Metal/Metal.h>
@@ -100,7 +101,10 @@ class API_AVAILABLE(macos(11.0), ios(14.0), tvos(14.0)) RenderingDeviceDriverMet
 	 * there are no more references to the MDLibrary associated with the cache entry.
 	 */
 	HashMap<SHA256Digest, ShaderCacheEntry *> _shader_cache;
-	void shader_cache_free_entry(const SHA256Digest &key);
+	Mutex _shader_cache_lock;
+	void shader_cache_free_entry(ShaderCacheEntry *p_entry);
+	MDLibrary *shader_cache_get_library(const SHA256Digest &key);
+	void shader_cache_set_entry(const SHA256Digest &key, ShaderCacheEntry *p_entry);
 
 public:
 	Error initialize(uint32_t p_device_index, uint32_t p_frame_count) override final;

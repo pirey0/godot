@@ -234,3 +234,24 @@ jobs:
           path: |
             ${{ matrix.bin }}
             ${{ steps.paths.outputs.pdb }}
+  tag-build:
+    name: 🏷️ Tag successful build
+    needs: [build-linux-editor, build-macos-editor, build-windows]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Push tag
+        env:
+          TAG: pvkk_build_${{ github.run_id }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "PVKK build $TAG"
+          git push origin "$TAG"

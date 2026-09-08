@@ -225,9 +225,8 @@ protected:
 	static void _bind_methods();
 
 public:
-#ifdef DEBUG_ENABLED
+	// [pvkk] Used by VM runtime error messages, which release builds report too.
 	static String debug_get_script_name(const Ref<Script> &p_script);
-#endif
 
 	static String canonicalize_path(const String &p_path);
 	_FORCE_INLINE_ static bool is_canonically_equal_paths(const String &p_path_a, const String &p_path_b) {

@@ -1342,7 +1342,6 @@ void GDScript::_save_orphaned_subclasses() {
 	}
 }
 
-#ifdef DEBUG_ENABLED
 String GDScript::debug_get_script_name(const Ref<Script> &p_script) {
 	if (p_script.is_valid()) {
 		Ref<GDScript> gdscript = p_script;
@@ -1364,7 +1363,6 @@ String GDScript::debug_get_script_name(const Ref<Script> &p_script) {
 
 	return "<unknown script>";
 }
-#endif
 
 String GDScript::canonicalize_path(const String &p_path) {
 	if (p_path.get_extension() == "gdc") {

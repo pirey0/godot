@@ -35,19 +35,8 @@
 #include "core/os/os.h"
 #include "core/profiling/profiling.h"
 
-#ifdef DEBUG_ENABLED
-
-static bool _profile_count_as_native(const Object *p_base_obj, const StringName &p_methodname) {
-	if (!p_base_obj) {
-		return false;
-	}
-	StringName cname = p_base_obj->get_class_name();
-	if ((p_methodname == "new" && cname == "GDScript") || p_methodname == "call") {
-		return false;
-	}
-	return ClassDB::class_exists(cname) && ClassDB::has_method(cname, p_methodname, false);
-}
-
+// [pvkk] These two are used to build runtime error messages, which release builds
+// now report as well, so they can no longer be debug-only.
 static String _get_element_type(Variant::Type builtin_type, const StringName &native_type, const Ref<Script> &script_type) {
 	if (script_type.is_valid() && script_type->is_valid()) {
 		return GDScript::debug_get_script_name(script_type);
@@ -101,6 +90,19 @@ static String _get_var_type(const Variant *p_var) {
 	}
 
 	return basestr;
+}
+
+#ifdef DEBUG_ENABLED
+
+static bool _profile_count_as_native(const Object *p_base_obj, const StringName &p_methodname) {
+	if (!p_base_obj) {
+		return false;
+	}
+	StringName cname = p_base_obj->get_class_name();
+	if ((p_methodname == "new" && cname == "GDScript") || p_methodname == "call") {
+		return false;
+	}
+	return ClassDB::class_exists(cname) && ClassDB::has_method(cname, p_methodname, false);
 }
 
 void GDScriptFunction::_profile_native_call(uint64_t p_t_taken, const String &p_func_name, const String &p_instance_class_name) {
@@ -693,8 +695,10 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 			OPCODE_BREAK;                                                                           \
 		}                                                                                           \
 		m_v = &variant_addresses[address_type][address_index];                                      \
-		if (unlikely(!m_v))                                                                         \
+		if (unlikely(!m_v)) {                                                                       \
+			err_text = "Bad address.";                                                              \
 			OPCODE_BREAK;                                                                           \
+		}                                                                                           \
 	}
 
 #else // !DEBUG_ENABLED
@@ -706,8 +710,10 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 	{                                                                                           \
 		int address = _code_ptr[ip + 1 + (m_code_ofs)];                                         \
 		m_v = &variant_addresses[(address & ADDR_TYPE_MASK) >> ADDR_BITS][address & ADDR_MASK]; \
-		if (unlikely(!m_v))                                                                     \
+		if (unlikely(!m_v)) {                                                                   \
+			err_text = "Bad address.";                                                          \
 			OPCODE_BREAK;                                                                       \
+		}                                                                                       \
 	}
 
 #endif // DEBUG_ENABLED
@@ -784,9 +790,7 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 					Variant::ValidatedOperatorEvaluator op_func = Variant::get_validated_operator_evaluator(op, a_type, b_type);
 
 					if (unlikely(!op_func)) {
-#ifdef DEBUG_ENABLED
 						err_text = "Invalid operands '" + Variant::get_type_name(a->get_type()) + "' and '" + Variant::get_type_name(b->get_type()) + "' in operator '" + Variant::get_operator_name(op) + "'.";
-#endif
 						initializer_mutex.unlock();
 						OPCODE_BREAK;
 					} else {
@@ -814,14 +818,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				} else {
 					// If the signature doesn't match, we have to use the slow path.
 #ifdef DEBUG_ENABLED
-
 					Variant ret;
 					Variant::evaluate(op, *a, *b, ret, valid);
-#else
-					Variant::evaluate(op, *a, *b, *dst, valid);
-#endif
-#ifdef DEBUG_ENABLED
-					if (!valid) {
+					if (unlikely(!valid)) {
 						if (ret.get_type() == Variant::STRING) {
 							//return a string when invalid with the error
 							err_text = ret;
@@ -832,6 +831,15 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 						OPCODE_BREAK;
 					}
 					*dst = ret;
+#else
+					// [pvkk] Release reports invalid operands too, but evaluates straight into
+					// `dst` to avoid the extra Variant copy. This path never caches a signature,
+					// so polymorphic call sites hit it on every execution.
+					Variant::evaluate(op, *a, *b, *dst, valid);
+					if (unlikely(!valid)) {
+						err_text = "Invalid operands '" + Variant::get_type_name(a->get_type()) + "' and '" + Variant::get_type_name(b->get_type()) + "' in operator '" + Variant::get_operator_name(op) + "'.";
+						OPCODE_BREAK;
+					}
 #endif
 				}
 				ip += 7 + _pointer_size;
@@ -1456,20 +1464,16 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				const StringName native_type = _global_names_ptr[native_type_idx];
 
 				if (src->get_type() != Variant::ARRAY) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to assign a value of type "%s" to a variable of type "Array[%s]".)",
 							_get_var_type(src), _get_element_type(builtin_type, native_type, *script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
 				Array *array = VariantInternal::get_array(src);
 
 				if (array->get_typed_builtin() != ((uint32_t)builtin_type) || array->get_typed_class_name() != native_type || array->get_typed_script() != *script_type) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to assign an array of type "%s" to a variable of type "Array[%s]".)",
 							_get_var_type(src), _get_element_type(builtin_type, native_type, *script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -1497,11 +1501,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				const StringName value_native_type = _global_names_ptr[value_native_type_idx];
 
 				if (src->get_type() != Variant::DICTIONARY) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to assign a value of type "%s" to a variable of type "Dictionary[%s, %s]".)",
 							_get_var_type(src), _get_element_type(key_builtin_type, key_native_type, *key_script_type),
 							_get_element_type(value_builtin_type, value_native_type, *value_script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -1509,11 +1511,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 
 				if (dictionary->get_typed_key_builtin() != ((uint32_t)key_builtin_type) || dictionary->get_typed_key_class_name() != key_native_type || dictionary->get_typed_key_script() != *key_script_type ||
 						dictionary->get_typed_value_builtin() != ((uint32_t)value_builtin_type) || dictionary->get_typed_value_class_name() != value_native_type || dictionary->get_typed_value_script() != *value_script_type) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to assign a dictionary of type "%s" to a variable of type "Dictionary[%s, %s]".)",
 							_get_var_type(src), _get_element_type(key_builtin_type, key_native_type, *key_script_type),
 							_get_element_type(value_builtin_type, value_native_type, *value_script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -2810,10 +2810,8 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 						Callable::CallError ce;
 						Variant::construct(ret_type, retvalue, const_cast<const Variant **>(&r), 1, ce);
 					} else {
-#ifdef DEBUG_ENABLED
 						err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "%s".)",
 								Variant::get_type_name(r->get_type()), Variant::get_type_name(ret_type));
-#endif // DEBUG_ENABLED
 
 						// Construct a base type anyway so type constraints are met.
 						Callable::CallError ce;
@@ -2838,20 +2836,16 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				const StringName native_type = _global_names_ptr[native_type_idx];
 
 				if (r->get_type() != Variant::ARRAY) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "Array[%s]".)",
 							Variant::get_type_name(r->get_type()), Variant::get_type_name(builtin_type));
-#endif
 					OPCODE_BREAK;
 				}
 
 				Array *array = VariantInternal::get_array(r);
 
 				if (array->get_typed_builtin() != ((uint32_t)builtin_type) || array->get_typed_class_name() != native_type || array->get_typed_script() != *script_type) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return an array of type "%s" where expected return type is "Array[%s]".)",
 							_get_var_type(r), _get_element_type(builtin_type, native_type, *script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -2878,11 +2872,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				const StringName value_native_type = _global_names_ptr[value_native_type_idx];
 
 				if (r->get_type() != Variant::DICTIONARY) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return a value of type "%s" where expected return type is "Dictionary[%s, %s]".)",
 							_get_var_type(r), _get_element_type(key_builtin_type, key_native_type, *key_script_type),
 							_get_element_type(value_builtin_type, value_native_type, *value_script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -2890,11 +2882,9 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 
 				if (dictionary->get_typed_key_builtin() != ((uint32_t)key_builtin_type) || dictionary->get_typed_key_class_name() != key_native_type || dictionary->get_typed_key_script() != *key_script_type ||
 						dictionary->get_typed_value_builtin() != ((uint32_t)value_builtin_type) || dictionary->get_typed_value_class_name() != value_native_type || dictionary->get_typed_value_script() != *value_script_type) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return a dictionary of type "%s" where expected return type is "Dictionary[%s, %s]".)",
 							_get_var_type(r), _get_element_type(key_builtin_type, key_native_type, *key_script_type),
 							_get_element_type(value_builtin_type, value_native_type, *value_script_type));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -2930,10 +2920,8 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				Object *ret_obj = r->operator Object *();
 #endif // DEBUG_ENABLED
 				if (ret_obj && !ClassDB::is_parent_class(ret_obj->get_class_name(), nc->get_name())) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "%s".)",
 							ret_obj->get_class_name(), nc->get_name());
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 				retvalue = *r;
@@ -2951,10 +2939,8 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				GD_ERR_BREAK(!base_type);
 
 				if (r->get_type() != Variant::OBJECT && r->get_type() != Variant::NIL) {
-#ifdef DEBUG_ENABLED
 					err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "%s".)",
 							Variant::get_type_name(r->get_type()), GDScript::debug_get_script_name(Ref<Script>(base_type)));
-#endif // DEBUG_ENABLED
 					OPCODE_BREAK;
 				}
 
@@ -2973,10 +2959,8 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 				if (ret_obj) {
 					ScriptInstance *ret_inst = ret_obj->get_script_instance();
 					if (!ret_inst) {
-#ifdef DEBUG_ENABLED
 						err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "%s".)",
 								ret_obj->get_class_name(), GDScript::debug_get_script_name(Ref<GDScript>(base_type)));
-#endif // DEBUG_ENABLED
 						OPCODE_BREAK;
 					}
 
@@ -2992,10 +2976,8 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 					}
 
 					if (!valid) {
-#ifdef DEBUG_ENABLED
 						err_text = vformat(R"(Trying to return value of type "%s" from a function whose return type is "%s".)",
 								GDScript::debug_get_script_name(ret_obj->get_script_instance()->get_script()), GDScript::debug_get_script_name(Ref<GDScript>(base_type)));
-#endif // DEBUG_ENABLED
 						OPCODE_BREAK;
 					}
 				}
@@ -3956,7 +3938,10 @@ Variant GDScriptFunction::call(GDScriptInstance *p_instance, const Variant **p_a
 #ifdef DEBUG_ENABLED
 			err_text = "Internal script error! Opcode: " + itos(last_opcode) + " (please report).";
 #else
-			err_text = "Internal script error! (please report).";
+			// [pvkk] `last_opcode` is debug-only because reading it costs a load per
+			// dispatch, so report the instruction pointer and the opcode sitting at it
+			// instead. Both are free here and enough to locate the offending handler.
+			err_text = "Internal script error! Opcode: " + itos(_code_ptr[ip]) + " at address " + itos(ip) + " (please report).";
 #endif
 		}
 
